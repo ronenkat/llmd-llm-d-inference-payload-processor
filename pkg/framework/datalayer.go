@@ -51,8 +51,7 @@ type Event struct {
 
 // RequestPayload is the Payload for RequestEventType.
 type RequestPayload struct {
-	Request   *InferenceRequest
-	StartTime time.Time
+	Request *InferenceRequest
 }
 
 // ResponsePayload is the Payload for ResponseEventType.
