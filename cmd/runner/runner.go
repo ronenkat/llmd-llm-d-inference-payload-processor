@@ -169,7 +169,8 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	handle := framework.NewHandle(ctx, mgr)
+	// TODO: wire a real DataStore once pkg/datastore is wired in.
+	handle := framework.NewHandle(ctx, mgr, nil)
 
 	// Register factories for all known in-tree plugins
 	r.registerInTreePlugins()
