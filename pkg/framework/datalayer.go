@@ -25,7 +25,7 @@ import (
 
 // DataStore provides model-keyed access to aggregated runtime metrics.
 type DataStore interface {
-	GetOrCreateModel(name string) *datalayer.Model
+	GetOrCreateModel(name string) datalayer.Model
 }
 
 // DataSource is the base interface for background data layer components.
