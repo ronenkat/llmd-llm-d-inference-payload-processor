@@ -25,7 +25,7 @@ import (
 
 // DataStore provides model-keyed access to aggregated runtime metrics.
 type DataStore interface {
-	GetOrCreateModel(name string) *datalayer.Model
+	GetOrCreateModel(name string) datalayer.Model
 }
 
 // DataSource is the base interface for background data layer components.
@@ -51,8 +51,7 @@ type Event struct {
 
 // RequestPayload is the Payload for RequestEventType.
 type RequestPayload struct {
-	Request   *InferenceRequest
-	StartTime time.Time
+	Request *InferenceRequest
 }
 
 // ResponsePayload is the Payload for ResponseEventType.
