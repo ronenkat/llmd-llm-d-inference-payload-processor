@@ -18,6 +18,8 @@ package datalayer
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -25,6 +27,11 @@ import (
 
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 )
+
+const RunningRequestsExtractorPluginType = "running-requests-extractor"
+
+// compile-time interface assertion
+var _ framework.Extractor = &RunningRequestsExtractor{}
 
 // RunningRequestsCount holds in-flight request and token counts for one model.
 type RunningRequestsCount struct {
@@ -51,14 +58,32 @@ type RunningRequestsExtractor struct {
 	counters sync.Map // model name -> *modelCounters
 }
 
-func NewRunningRequestsExtractor(handle framework.Handle) *RunningRequestsExtractor {
-	return &RunningRequestsExtractor{
-		name:   framework.TypedName{Type: "RunningRequestsExtractor", Name: "running-requests-extractor"},
-		handle: handle,
+// RunningRequestsExtractorFactory is the factory function for RunningRequestsExtractor.
+func RunningRequestsExtractorFactory(name string, _ json.RawMessage, handle framework.Handle) (framework.Plugin, error) {
+	ext, err := NewRunningRequestsExtractor(handle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create '%s' plugin - %w", RunningRequestsExtractorPluginType, err)
 	}
+	return ext.WithName(name), nil
+}
+
+func NewRunningRequestsExtractor(handle framework.Handle) (*RunningRequestsExtractor, error) {
+	if handle == nil {
+		return nil, fmt.Errorf("handle is required for plugin '%s'", RunningRequestsExtractorPluginType)
+	}
+	return &RunningRequestsExtractor{
+		name:   framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
+		handle: handle,
+	}, nil
 }
 
 func (e *RunningRequestsExtractor) TypedName() framework.TypedName { return e.name }
+
+// WithName sets the instance name, used by the factory when the plugin is configured by name.
+func (e *RunningRequestsExtractor) WithName(name string) *RunningRequestsExtractor {
+	e.name.Name = name
+	return e
+}
 
 func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework.Event) error {
 	touched := make(map[string]struct{})
