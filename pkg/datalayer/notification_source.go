@@ -18,7 +18,9 @@ package datalayer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -28,9 +30,14 @@ import (
 )
 
 const (
+	NotificationSourcePluginType = "notification-source"
+
 	defaultBufferSize   = 10000
 	defaultTickInterval = 100 * time.Millisecond
 )
+
+// compile-time interface assertion
+var _ framework.NotificationSource = &notificationSource{}
 
 type notificationSource struct {
 	name       framework.TypedName
@@ -43,16 +50,28 @@ type notificationSource struct {
 	done    chan struct{}
 }
 
+// NotificationSourceFactory is the factory function for NotificationSource.
+func NotificationSourceFactory(name string, _ json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
+	src, err := NewNotificationSource(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create '%s' plugin - %w", NotificationSourcePluginType, err)
+	}
+	return src, nil
+}
+
 // NewNotificationSource creates a NotificationSource that fans event batches
 // to the given extractors on every tick.
-func NewNotificationSource(name string, extractors ...framework.Extractor) framework.NotificationSource {
+func NewNotificationSource(name string, extractors ...framework.Extractor) (framework.NotificationSource, error) {
+	if name == "" {
+		return nil, fmt.Errorf("name is required for plugin '%s'", NotificationSourcePluginType)
+	}
 	return &notificationSource{
-		name:       framework.TypedName{Type: "NotificationSource", Name: name},
+		name:       framework.TypedName{Type: NotificationSourcePluginType, Name: name},
 		ch:         make(chan framework.Event, defaultBufferSize),
 		extractors: extractors,
 		interval:   defaultTickInterval,
 		done:       make(chan struct{}),
-	}
+	}, nil
 }
 
 func (n *notificationSource) TypedName() framework.TypedName { return n.name }
