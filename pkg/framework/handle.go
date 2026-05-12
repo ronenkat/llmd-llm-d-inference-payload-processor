@@ -37,9 +37,9 @@ type Handle interface {
 
 // payloadProcessorHandle is an implementation of the Handle interface.
 type payloadProcessorHandle struct {
-	ctx       context.Context
-	mgr       ctrl.Manager
-	datastore datastore.Datastore
+	ctx context.Context
+	mgr ctrl.Manager
+	ds  datastore.Datastore
 }
 
 // Context returns a context the plugins can use, if they need one
@@ -56,21 +56,21 @@ func (h *payloadProcessorHandle) ReconcilerBuilder() *ctrlbuilder.Builder {
 }
 
 func (h *payloadProcessorHandle) GetOrCreateModel(name string) datalayer.Model {
-	return h.datastore.GetOrCreateModel(name)
+	return h.ds.GetOrCreateModel(name)
 }
 
 func (h *payloadProcessorHandle) DeleteModel(name string) {
-	h.datastore.DeleteModel(name)
+	h.ds.DeleteModel(name)
 }
 
 func (h *payloadProcessorHandle) Models() []string {
-	return h.datastore.Models()
+	return h.ds.Models()
 }
 
 func NewHandle(ctx context.Context, mgr ctrl.Manager, ds datastore.Datastore) Handle {
 	return &payloadProcessorHandle{
-		ctx:       ctx,
-		mgr:       mgr,
-		datastore: ds,
+		ctx: ctx,
+		mgr: mgr,
+		ds:  ds,
 	}
 }
