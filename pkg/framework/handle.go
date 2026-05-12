@@ -19,6 +19,8 @@ package framework
 import (
 	"context"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlbuilder "sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,12 +32,14 @@ type Handle interface {
 	Context() context.Context
 	Client() client.Client
 	ReconcilerBuilder() *ctrlbuilder.Builder
+	datastore.Datastore
 }
 
 // payloadProcessorHandle is an implementation of the Handle interface.
 type payloadProcessorHandle struct {
-	ctx context.Context
-	mgr ctrl.Manager
+	ctx       context.Context
+	mgr       ctrl.Manager
+	datastore datastore.Datastore
 }
 
 // Context returns a context the plugins can use, if they need one
@@ -51,9 +55,22 @@ func (h *payloadProcessorHandle) ReconcilerBuilder() *ctrlbuilder.Builder {
 	return ctrl.NewControllerManagedBy(h.mgr)
 }
 
-func NewHandle(ctx context.Context, mgr ctrl.Manager) Handle {
+func (h *payloadProcessorHandle) GetOrCreateModel(name string) datalayer.Model {
+	return h.datastore.GetOrCreateModel(name)
+}
+
+func (h *payloadProcessorHandle) DeleteModel(name string) {
+	h.datastore.DeleteModel(name)
+}
+
+func (h *payloadProcessorHandle) Models() []string {
+	return h.datastore.Models()
+}
+
+func NewHandle(ctx context.Context, mgr ctrl.Manager, ds datastore.Datastore) Handle {
 	return &payloadProcessorHandle{
-		ctx: ctx,
-		mgr: mgr,
+		ctx:       ctx,
+		mgr:       mgr,
+		datastore: ds,
 	}
 }

@@ -28,6 +28,7 @@ import (
 	crconfig "sigs.k8s.io/controller-runtime/pkg/config"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 )
 
@@ -116,7 +117,8 @@ func TestBaseModelToHeaderPluginFactory(t *testing.T) {
 			}
 
 			// Create a handle using the test manager
-			handle := framework.NewHandle(context.Background(), mgr)
+			ds := datastore.NewStore()
+			handle := framework.NewHandle(context.Background(), mgr, ds)
 
 			p, err := BaseModelToHeaderPluginFactory(tt.pluginName, tt.rawParams, handle)
 			if err != nil {
