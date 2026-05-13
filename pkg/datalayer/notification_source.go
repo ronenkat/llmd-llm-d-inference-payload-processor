@@ -56,8 +56,8 @@ func NotificationSourceFactory(name string, _ json.RawMessage, _ framework.Handl
 	return src, nil
 }
 
-// NewNotificationSource creates a NotificationSource that fans event batches
-// to the given extractors on every tick.
+// NewNotificationSource creates a NotificationSource that delivers each event
+// to the given extractors as it arrives.
 func NewNotificationSource(name string, extractors ...framework.Extractor) (framework.NotificationSource, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name is required for plugin '%s'", NotificationSourcePluginType)
@@ -84,7 +84,7 @@ func (n *notificationSource) Notify(e framework.Event) {
 	}
 }
 
-// Start launches the tick loop. Returns an error if called more than once.
+// Start launches the event loop. Returns an error if called more than once.
 func (n *notificationSource) Start(ctx context.Context) error {
 	if !n.started.CompareAndSwap(false, true) {
 		return errors.New("NotificationSource already started")
@@ -96,7 +96,7 @@ func (n *notificationSource) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop cancels the tick loop and waits for it to exit.
+// Stop cancels the event loop and waits for it to exit.
 func (n *notificationSource) Stop() {
 	if n.cancel != nil {
 		n.cancel()
