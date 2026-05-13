@@ -52,5 +52,8 @@ func (h *payloadProcessorHandle) ReconcilerBuilder() *ctrlbuilder.Builder {
 }
 
 func NewHandle(ctx context.Context, mgr ctrl.Manager) Handle {
-	return &payloadProcessorHandle{ctx: ctx, mgr: mgr}
+	return &payloadProcessorHandle{
+		ctx: ctx,
+		mgr: mgr,
+	}
 }
