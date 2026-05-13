@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -32,8 +31,7 @@ import (
 const (
 	NotificationSourcePluginType = "notification-source"
 
-	defaultBufferSize   = 10000
-	defaultTickInterval = 100 * time.Millisecond
+	defaultBufferSize = 10000
 )
 
 // compile-time interface assertion
@@ -43,7 +41,6 @@ type notificationSource struct {
 	name       framework.TypedName
 	ch         chan framework.Event
 	extractors []framework.Extractor
-	interval   time.Duration
 
 	started atomic.Bool
 	cancel  context.CancelFunc
@@ -69,7 +66,6 @@ func NewNotificationSource(name string, extractors ...framework.Extractor) (fram
 		name:       framework.TypedName{Type: NotificationSourcePluginType, Name: name},
 		ch:         make(chan framework.Event, defaultBufferSize),
 		extractors: extractors,
-		interval:   defaultTickInterval,
 		done:       make(chan struct{}),
 	}, nil
 }
@@ -95,7 +91,7 @@ func (n *notificationSource) Start(ctx context.Context) error {
 	}
 	ctx, n.cancel = context.WithCancel(ctx)
 	ready := make(chan struct{})
-	go n.tickLoop(ctx, ready)
+	go n.eventLoop(ctx, ready)
 	<-ready
 	return nil
 }
@@ -108,9 +104,7 @@ func (n *notificationSource) Stop() {
 	}
 }
 
-func (n *notificationSource) tickLoop(ctx context.Context, ready chan struct{}) {
-	ticker := time.NewTicker(n.interval)
-	defer ticker.Stop()
+func (n *notificationSource) eventLoop(ctx context.Context, ready chan struct{}) {
 	close(ready)
 
 	logger := log.FromContext(ctx).WithName("notification-source")
@@ -120,28 +114,14 @@ func (n *notificationSource) tickLoop(ctx context.Context, ready chan struct{}) 
 		case <-ctx.Done():
 			close(n.done)
 			return
-		case <-ticker.C:
-			batch := n.drain()
+		case e := <-n.ch:
 			// Extractors are called sequentially; current extractors are in-memory only.
 			// Switch to a WaitGroup if any extractor performs I/O.
 			for _, ext := range n.extractors {
-				if err := ext.Extract(ctx, batch); err != nil {
+				if err := ext.Extract(ctx, []framework.Event{e}); err != nil {
 					logger.Error(err, "extractor error", "extractor", ext.TypedName())
 				}
 			}
-		}
-	}
-}
-
-// drain reads all pending events from the channel without blocking.
-func (n *notificationSource) drain() []framework.Event {
-	var batch []framework.Event
-	for {
-		select {
-		case e := <-n.ch:
-			batch = append(batch, e)
-		default:
-			return batch
 		}
 	}
 }
