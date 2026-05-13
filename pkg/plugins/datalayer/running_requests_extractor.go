@@ -18,7 +18,6 @@ package datalayer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -53,27 +52,18 @@ type modelCounters struct {
 // drop, upstream error, context cancellation). The call site should fire a
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
 type RunningRequestsExtractor struct {
-	name     framework.TypedName
-	handle   framework.Handle
-	counters sync.Map // model name -> *modelCounters
+	name      framework.TypedName
+	dataStore framework.DataStore
+	counters  sync.Map // model name -> *modelCounters
 }
 
-// RunningRequestsExtractorFactory is the factory function for RunningRequestsExtractor.
-func RunningRequestsExtractorFactory(name string, _ json.RawMessage, handle framework.Handle) (framework.Plugin, error) {
-	ext, err := NewRunningRequestsExtractor(handle)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create '%s' plugin - %w", RunningRequestsExtractorPluginType, err)
-	}
-	return ext.WithName(name), nil
-}
-
-func NewRunningRequestsExtractor(handle framework.Handle) (*RunningRequestsExtractor, error) {
-	if handle == nil {
-		return nil, fmt.Errorf("handle is required for plugin '%s'", RunningRequestsExtractorPluginType)
+func NewRunningRequestsExtractor(ds framework.DataStore) (*RunningRequestsExtractor, error) {
+	if ds == nil {
+		return nil, fmt.Errorf("dataStore is required for plugin '%s'", RunningRequestsExtractorPluginType)
 	}
 	return &RunningRequestsExtractor{
-		name:   framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
-		handle: handle,
+		name:      framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
+		dataStore: ds,
 	}, nil
 }
 
@@ -125,7 +115,7 @@ func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework
 	for model := range touched {
 		v, _ := e.counters.Load(model)
 		c := v.(*modelCounters)
-		e.handle.DataStore().GetOrCreateModel(model).GetAttributes().Put("running-requests", RunningRequestsCount{
+		e.dataStore.GetOrCreateModel(model).GetAttributes().Put("running-requests", RunningRequestsCount{
 			Requests: c.requests.Load(),
 			Tokens:   c.tokens.Load(),
 		})

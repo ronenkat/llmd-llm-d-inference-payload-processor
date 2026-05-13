@@ -30,14 +30,12 @@ type Handle interface {
 	Context() context.Context
 	Client() client.Client
 	ReconcilerBuilder() *ctrlbuilder.Builder
-	DataStore() DataStore
 }
 
 // payloadProcessorHandle is an implementation of the Handle interface.
 type payloadProcessorHandle struct {
-	ctx       context.Context
-	mgr       ctrl.Manager
-	dataStore DataStore
+	ctx context.Context
+	mgr ctrl.Manager
 }
 
 // Context returns a context the plugins can use, if they need one
@@ -53,14 +51,6 @@ func (h *payloadProcessorHandle) ReconcilerBuilder() *ctrlbuilder.Builder {
 	return ctrl.NewControllerManagedBy(h.mgr)
 }
 
-func (h *payloadProcessorHandle) DataStore() DataStore {
-	return h.dataStore
-}
-
-func NewHandle(ctx context.Context, mgr ctrl.Manager, ds DataStore) Handle {
-	return &payloadProcessorHandle{
-		ctx:       ctx,
-		mgr:       mgr,
-		dataStore: ds,
-	}
+func NewHandle(ctx context.Context, mgr ctrl.Manager) Handle {
+	return &payloadProcessorHandle{ctx: ctx, mgr: mgr}
 }
