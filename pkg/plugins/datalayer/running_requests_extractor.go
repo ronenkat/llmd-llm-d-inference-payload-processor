@@ -19,7 +19,6 @@ package datalayer
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	fwdatalayer "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
 
@@ -42,13 +41,15 @@ func (r RunningRequestsCount) Clone() fwdatalayer.Cloneable { return r }
 // RunningRequestsExtractor tracks in-flight request counts and token sums per model.
 // It writes RunningRequestsCount to each model's "running-requests" attribute.
 //
+// Extract is assumed to be called from a single goroutine (the NotificationSource event loop).
+// If parallel dispatch is introduced, add a sync.Mutex around counters and the DataStore write.
+//
 // TODO: counters leak if a request fails without a corresponding ResponseEventType (e.g. connection
 // drop, upstream error, context cancellation). The call site should fire a
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
 type RunningRequestsExtractor struct {
 	name      framework.TypedName
 	dataStore framework.DataStore
-	mu        sync.Mutex
 	counters  map[string]RunningRequestsCount
 }
 
@@ -74,7 +75,6 @@ func (e *RunningRequestsExtractor) WithName(name string) *RunningRequestsExtract
 func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework.Event) error {
 	updated := map[string]RunningRequestsCount{}
 
-	e.mu.Lock()
 	for _, ev := range events {
 		switch ev.Type {
 		case framework.RequestEventType:
@@ -110,7 +110,6 @@ func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework
 			updated[model] = c
 		}
 	}
-	e.mu.Unlock()
 
 	for model, c := range updated {
 		e.dataStore.GetOrCreateModel(model).GetAttributes().Put("running-requests", c)
