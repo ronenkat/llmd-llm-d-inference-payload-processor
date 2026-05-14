@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
-	"time"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -32,8 +31,7 @@ import (
 const (
 	NotificationSourcePluginType = "notification-source"
 
-	defaultBufferSize   = 10000
-	defaultTickInterval = 100 * time.Millisecond
+	defaultBufferSize = 10000
 )
 
 // compile-time interface assertion
@@ -43,7 +41,6 @@ type notificationSource struct {
 	name       framework.TypedName
 	ch         chan framework.Event
 	extractors []framework.Extractor
-	interval   time.Duration
 
 	started atomic.Bool
 	cancel  context.CancelFunc
@@ -59,8 +56,8 @@ func NotificationSourceFactory(name string, _ json.RawMessage, _ framework.Handl
 	return src, nil
 }
 
-// NewNotificationSource creates a NotificationSource that fans event batches
-// to the given extractors on every tick.
+// NewNotificationSource creates a NotificationSource that delivers each event
+// to the given extractors as it arrives.
 func NewNotificationSource(name string, extractors ...framework.Extractor) (framework.NotificationSource, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name is required for plugin '%s'", NotificationSourcePluginType)
@@ -69,7 +66,6 @@ func NewNotificationSource(name string, extractors ...framework.Extractor) (fram
 		name:       framework.TypedName{Type: NotificationSourcePluginType, Name: name},
 		ch:         make(chan framework.Event, defaultBufferSize),
 		extractors: extractors,
-		interval:   defaultTickInterval,
 		done:       make(chan struct{}),
 	}, nil
 }
@@ -88,19 +84,19 @@ func (n *notificationSource) Notify(e framework.Event) {
 	}
 }
 
-// Start launches the tick loop. Returns an error if called more than once.
+// Start launches the event loop. Returns an error if called more than once.
 func (n *notificationSource) Start(ctx context.Context) error {
 	if !n.started.CompareAndSwap(false, true) {
 		return errors.New("NotificationSource already started")
 	}
 	ctx, n.cancel = context.WithCancel(ctx)
 	ready := make(chan struct{})
-	go n.tickLoop(ctx, ready)
+	go n.eventLoop(ctx, ready)
 	<-ready
 	return nil
 }
 
-// Stop cancels the tick loop and waits for it to exit.
+// Stop cancels the event loop and waits for it to exit.
 func (n *notificationSource) Stop() {
 	if n.cancel != nil {
 		n.cancel()
@@ -108,9 +104,7 @@ func (n *notificationSource) Stop() {
 	}
 }
 
-func (n *notificationSource) tickLoop(ctx context.Context, ready chan struct{}) {
-	ticker := time.NewTicker(n.interval)
-	defer ticker.Stop()
+func (n *notificationSource) eventLoop(ctx context.Context, ready chan struct{}) {
 	close(ready)
 
 	logger := log.FromContext(ctx).WithName("notification-source")
@@ -120,28 +114,14 @@ func (n *notificationSource) tickLoop(ctx context.Context, ready chan struct{}) 
 		case <-ctx.Done():
 			close(n.done)
 			return
-		case <-ticker.C:
-			batch := n.drain()
+		case e := <-n.ch:
 			// Extractors are called sequentially; current extractors are in-memory only.
 			// Switch to a WaitGroup if any extractor performs I/O.
 			for _, ext := range n.extractors {
-				if err := ext.Extract(ctx, batch); err != nil {
+				if err := ext.Extract(ctx, []framework.Event{e}); err != nil {
 					logger.Error(err, "extractor error", "extractor", ext.TypedName())
 				}
 			}
-		}
-	}
-}
-
-// drain reads all pending events from the channel without blocking.
-func (n *notificationSource) drain() []framework.Event {
-	var batch []framework.Event
-	for {
-		select {
-		case e := <-n.ch:
-			batch = append(batch, e)
-		default:
-			return batch
 		}
 	}
 }
