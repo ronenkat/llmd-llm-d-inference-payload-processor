@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	fwdatalayer "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
 
@@ -40,11 +39,6 @@ type RunningRequestsCount struct {
 
 func (r RunningRequestsCount) Clone() fwdatalayer.Cloneable { return r }
 
-type modelCounters struct {
-	requests atomic.Int64
-	tokens   atomic.Int64
-}
-
 // RunningRequestsExtractor tracks in-flight request counts and token sums per model.
 // It writes RunningRequestsCount to each model's "running-requests" attribute.
 //
@@ -54,7 +48,8 @@ type modelCounters struct {
 type RunningRequestsExtractor struct {
 	name      framework.TypedName
 	dataStore framework.DataStore
-	counters  sync.Map // model name -> *modelCounters
+	mu        sync.Mutex
+	counters  map[string]RunningRequestsCount
 }
 
 func NewRunningRequestsExtractor(ds framework.DataStore) (*RunningRequestsExtractor, error) {
@@ -64,6 +59,7 @@ func NewRunningRequestsExtractor(ds framework.DataStore) (*RunningRequestsExtrac
 	return &RunningRequestsExtractor{
 		name:      framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
 		dataStore: ds,
+		counters:  make(map[string]RunningRequestsCount),
 	}, nil
 }
 
@@ -76,8 +72,9 @@ func (e *RunningRequestsExtractor) WithName(name string) *RunningRequestsExtract
 }
 
 func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework.Event) error {
-	touched := make(map[string]struct{})
+	updated := map[string]RunningRequestsCount{}
 
+	e.mu.Lock()
 	for _, ev := range events {
 		switch ev.Type {
 		case framework.RequestEventType:
@@ -90,10 +87,11 @@ func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework
 				continue
 			}
 			maxTokens, _ := p.Request.Body["max_tokens"].(float64)
-			c := e.getOrCreateCounters(model)
-			c.requests.Add(1)
-			c.tokens.Add(int64(maxTokens))
-			touched[model] = struct{}{}
+			c := e.counters[model]
+			c.Requests++
+			c.Tokens += int64(maxTokens)
+			e.counters[model] = c
+			updated[model] = c
 
 		case framework.ResponseEventType:
 			p, ok := ev.Payload.(framework.ResponsePayload)
@@ -105,40 +103,25 @@ func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework
 				continue
 			}
 			maxTokens, _ := p.Request.Body["max_tokens"].(float64)
-			c := e.getOrCreateCounters(model)
-			floorDecrement(&c.requests, 1)
-			floorDecrement(&c.tokens, int64(maxTokens))
-			touched[model] = struct{}{}
+			c := e.counters[model]
+			floorDecrement(&c.Requests, 1)
+			floorDecrement(&c.Tokens, int64(maxTokens))
+			e.counters[model] = c
+			updated[model] = c
 		}
 	}
+	e.mu.Unlock()
 
-	for model := range touched {
-		v, _ := e.counters.Load(model)
-		c := v.(*modelCounters)
-		e.dataStore.GetOrCreateModel(model).GetAttributes().Put("running-requests", RunningRequestsCount{
-			Requests: c.requests.Load(),
-			Tokens:   c.tokens.Load(),
-		})
+	for model, c := range updated {
+		e.dataStore.GetOrCreateModel(model).GetAttributes().Put("running-requests", c)
 	}
-
 	return nil
 }
 
-func (e *RunningRequestsExtractor) getOrCreateCounters(model string) *modelCounters {
-	v, _ := e.counters.LoadOrStore(model, &modelCounters{})
-	return v.(*modelCounters)
-}
-
-// floorDecrement decrements counter by delta, flooring at zero atomically.
-func floorDecrement(counter *atomic.Int64, delta int64) {
-	for {
-		old := counter.Load()
-		newVal := old - delta
-		if newVal < 0 {
-			newVal = 0
-		}
-		if counter.CompareAndSwap(old, newVal) {
-			return
-		}
+// floorDecrement decrements v by delta, flooring at zero.
+func floorDecrement(v *int64, delta int64) {
+	*v -= delta
+	if *v < 0 {
+		*v = 0
 	}
 }
