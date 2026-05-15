@@ -203,8 +203,7 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		// Wire the running-requests data pipeline: extractor → notification source.
 		// TODO: config-driven path does not yet support NotificationSource + extractors.
-		runningReqExtractor := plugindatalayer.NewRunningRequestsExtractor()
-		notifSrc, err := datalayer.NewNotificationSource("default", ds, runningReqExtractor)
+		notifSrc, err := datalayer.NewNotificationSource("default", plugindatalayer.NewRunningRequestsExtractor(ds))
 		if err != nil {
 			setupLog.Error(err, "failed to create notification source")
 			return err
