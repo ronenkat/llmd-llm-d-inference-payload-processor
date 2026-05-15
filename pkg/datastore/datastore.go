@@ -29,6 +29,9 @@ type Datastore interface {
 	Models() []string
 }
 
+// Store is the global datastore instance.
+var Store Datastore
+
 // store is a thread-safe registry of Model entries keyed by model name.
 // The outer key is the model name; each Model holds an AttributeMap for
 // dynamic runtime metrics (e.g. "running-requests", "pool-latency") and

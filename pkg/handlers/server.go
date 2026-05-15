@@ -33,6 +33,7 @@ import (
 	envoy "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/envoy"
 	errcommon "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/error"
 	logutil "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 	"github.com/llm-d/llm-d-inference-payload-processor/version"
 )
@@ -46,6 +47,7 @@ const (
 )
 
 func NewServer(requestPlugins []framework.RequestProcessor, responsePlugins []framework.ResponseProcessor) *Server {
+	datastore.Store = datastore.NewStore()
 	return &Server{
 		requestPlugins:  requestPlugins,
 		responsePlugins: responsePlugins,
