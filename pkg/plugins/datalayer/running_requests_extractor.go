@@ -18,7 +18,7 @@ package datalayer
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 
 	fwdatalayer "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
 
@@ -29,6 +29,11 @@ const RunningRequestsExtractorPluginType = "running-requests-extractor"
 
 // compile-time interface assertion
 var _ framework.Extractor = &RunningRequestsExtractor{}
+
+// RunningRequestsExtractorFactory is the factory function for RunningRequestsExtractor.
+func RunningRequestsExtractorFactory(name string, _ json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
+	return NewRunningRequestsExtractor().WithName(name), nil
+}
 
 // RunningRequestsCount holds in-flight request and token counts for one model.
 type RunningRequestsCount struct {
@@ -48,20 +53,15 @@ func (r RunningRequestsCount) Clone() fwdatalayer.Cloneable { return r }
 // drop, upstream error, context cancellation). The call site should fire a
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
 type RunningRequestsExtractor struct {
-	name      framework.TypedName
-	dataStore framework.DataStore
-	counters  map[string]RunningRequestsCount
+	name     framework.TypedName
+	counters map[string]RunningRequestsCount
 }
 
-func NewRunningRequestsExtractor(ds framework.DataStore) (*RunningRequestsExtractor, error) {
-	if ds == nil {
-		return nil, fmt.Errorf("dataStore is required for plugin '%s'", RunningRequestsExtractorPluginType)
-	}
+func NewRunningRequestsExtractor() *RunningRequestsExtractor {
 	return &RunningRequestsExtractor{
-		name:      framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
-		dataStore: ds,
-		counters:  make(map[string]RunningRequestsCount),
-	}, nil
+		name:     framework.TypedName{Type: RunningRequestsExtractorPluginType, Name: RunningRequestsExtractorPluginType},
+		counters: make(map[string]RunningRequestsCount),
+	}
 }
 
 func (e *RunningRequestsExtractor) TypedName() framework.TypedName { return e.name }
@@ -72,7 +72,7 @@ func (e *RunningRequestsExtractor) WithName(name string) *RunningRequestsExtract
 	return e
 }
 
-func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework.Event) error {
+func (e *RunningRequestsExtractor) Extract(_ context.Context, ds framework.DataStore, events []framework.Event) error {
 	updated := map[string]RunningRequestsCount{}
 
 	for _, ev := range events {
@@ -112,7 +112,7 @@ func (e *RunningRequestsExtractor) Extract(_ context.Context, events []framework
 	}
 
 	for model, c := range updated {
-		e.dataStore.GetOrCreateModel(model).GetAttributes().Put("running-requests", c)
+		ds.GetOrCreateModel(model).GetAttributes().Put("running-requests", c)
 	}
 	return nil
 }
