@@ -57,7 +57,7 @@ func NotificationSourceFactory(name string, _ json.RawMessage, _ framework.Handl
 }
 
 // NewNotificationSource creates a NotificationSource that delivers each event
-// to the registered extractors as it arrives.
+// to the given extractors as it arrives.
 func NewNotificationSource(name string, extractors ...framework.Extractor) (framework.NotificationSource, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name is required for plugin '%s'", NotificationSourcePluginType)
