@@ -224,7 +224,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Wire the running-requests data pipeline: extractor → notification source.
+	// Wire the inflight-requests data pipeline: extractor → notification source.
     // TODO: config-driven path does not yet support NotificationSource + extractors.
 	notifSrc, err := datalayer.NewNotificationSource("default", inflightrequests.NewInflightRequestsExtractor(ds))
 	if err != nil {
