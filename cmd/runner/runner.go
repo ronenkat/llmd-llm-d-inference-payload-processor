@@ -38,11 +38,13 @@ import (
 	logutil "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/profiling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/metrics"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/basemodelextractor"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/bodyfieldtoheader"
+	inflightrequests "github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/datalayer/inflightrequests"
 	runserver "github.com/llm-d/llm-d-inference-payload-processor/pkg/server"
 	"github.com/llm-d/llm-d-inference-payload-processor/version"
 )
@@ -172,6 +174,8 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	handle := framework.NewHandle(ctx, mgr)
 
+	ds := datastore.NewStore()
+
 	// Register factories for all known in-tree plugins
 	r.registerInTreePlugins()
 
@@ -220,6 +224,18 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
+	// Wire the inflight-requests data pipeline: extractor → notification source.
+    // TODO: config-driven path does not yet support NotificationSource + extractors.
+	notifSrc, err := datalayer.NewNotificationSource("default", inflightrequests.NewInflightRequestsExtractor(ds))
+	if err != nil {
+		setupLog.Error(err, "failed to create notification source")
+		return err
+	}
+	if err := notifSrc.Start(ctx); err != nil {
+		setupLog.Error(err, "failed to start notification source")
+		return err
+	}
+
 	// Setup ExtProc Server Runner.
 	serverRunner := &runserver.ExtProcServerRunner{
 		GrpcPort:        opts.GRPCPort,
@@ -254,6 +270,7 @@ func (r *Runner) registerInTreePlugins() {
 	framework.Register(bodyfieldtoheader.BodyFieldToHeaderPluginType, bodyfieldtoheader.BodyFieldToHeaderPluginFactory)
 	framework.Register(basemodelextractor.BaseModelToHeaderPluginType, basemodelextractor.BaseModelToHeaderPluginFactory)
 	framework.Register(datalayer.NotificationSourcePluginType, datalayer.NotificationSourceFactory)
+	framework.Register(inflightrequests.PluginType, inflightrequests.Factory)
 }
 
 // registerHealthServer adds the Health gRPC server as a Runnable to the given manager.
