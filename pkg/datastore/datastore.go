@@ -22,15 +22,27 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
 )
 
+// PrefixIndexer is an interface for the prefix cache indexer.
+// This avoids import cycles by defining the interface here rather than in the prefix package.
+type PrefixIndexer interface {
+	// Methods will be defined by the implementation
+}
+
 // Datastore is the interface for reading and updating the model store.
 type Datastore interface {
 	GetOrCreateModel(name string) datalayer.Model
 	DeleteModel(name string)
 	Models() []string
+	GetPrefixIndexer() PrefixIndexer
+	SetPrefixIndexer(indexer PrefixIndexer) PrefixIndexer
 }
 
 // Store is the global datastore instance.
 var Store Datastore
+
+var (
+	once sync.Once
+)
 
 // store is a thread-safe registry of Model entries keyed by model name.
 // The outer key is the model name; each Model holds an AttributeMap for
@@ -39,13 +51,41 @@ var Store Datastore
 //
 // All operations are thread-safe using RWMutex.
 type store struct {
-	mu     sync.RWMutex
-	models map[string]datalayer.Model
+	mu            sync.RWMutex
+	models        map[string]datalayer.Model
+	prefixIndexer PrefixIndexer
 }
 
-// NewStore creates and returns a new Datastore instance.
+// NewStore creates and returns a new Datastore instance with an initialized prefix indexer.
+// When called, it also initializes the global Store variable exactly once using sync.Once.
 func NewStore() Datastore {
-	return &store{models: make(map[string]datalayer.Model)}
+	once.Do(func() {
+		Store = &store{
+			models:        make(map[string]datalayer.Model),
+			prefixIndexer: nil, // Will be set externally via SetPrefixIndexer
+		}
+	})
+	return Store
+}
+
+// SetPrefixIndexer sets the prefix indexer for the store.
+// This must be called after creating the store to initialize the indexer.
+// If the indexer is already set, it returns the current indexer without modification.
+func (s *store) SetPrefixIndexer(indexer PrefixIndexer) PrefixIndexer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.prefixIndexer != nil {
+		return s.prefixIndexer
+	}
+	s.prefixIndexer = indexer
+	return indexer
+}
+
+// GetPrefixIndexer returns the prefix indexer.
+func (s *store) GetPrefixIndexer() PrefixIndexer {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.prefixIndexer
 }
 
 // GetOrCreateModel returns the Model for name, creating it atomically if it does not exist.

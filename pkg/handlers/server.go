@@ -47,7 +47,7 @@ const (
 )
 
 func NewServer(requestPlugins []framework.RequestProcessor, responsePlugins []framework.ResponseProcessor) *Server {
-	datastore.Store = datastore.NewStore()
+	datastore.NewStore()
 	return &Server{
 		requestPlugins:  requestPlugins,
 		responsePlugins: responsePlugins,
