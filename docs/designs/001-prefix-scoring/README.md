@@ -39,7 +39,7 @@ The Prefix Hash-Index-Score system consists of three main components that operat
 
 The hash function implementation uses the xxHash algorithm for fast, high-quality hashing.
 
-1. **Block-based Hashing**: The request prompt is divided into fixed-size text blocks (default: 1 text blocks ≈ 16 characters). Each block is hashed independently, creating a sequence of [`BlockHash`](pkg/plugins/prefixhashing/types.go) values.
+1. **Block-based Hashing**: The request prompt is divided into fixed-size text blocks. Each block is hashed independently, creating a sequence of [`BlockHash`](pkg/plugins/prefixhashing/types.go) values.
 
 2. **Chained Hashing**: To ensure that identical prefixes in different positions produce different hashes, each block hash incorporates the previous block's hash:
    ```
@@ -53,7 +53,7 @@ The hash function implementation uses the xxHash algorithm for fast, high-qualit
    ```
 
 4. **Configurable Parameters**:
-   - `HashBlockSize`: Size of each text block (default: 16)
+   - `HashBlockSize`: Size of each text block (default: 64)
    - `MaxPrefixBlocksToMatch`: Maximum number of blocks to hash (default: 1024)
 
 **Hash Function Properties:**
