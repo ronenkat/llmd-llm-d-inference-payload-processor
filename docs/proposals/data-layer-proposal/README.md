@@ -53,11 +53,11 @@ event loop reads each event from the channel as it arrives and fans it out to al
 `Extractor`s. Each extractor switches on `Event.Type` and handles what it understands,
 ignoring the rest.
 
-### Types (`pkg/framework`)
+### Types (`pkg/framework/datalayer/`)
 
 ```go
 type DataSource interface {
-    Plugin                            // TypedName() TypedName
+    framework.Plugin                  // TypedName() TypedName
     Start(ctx context.Context) error
     // Stop signals the component to shut down and blocks until it has fully stopped.
     Stop()
@@ -83,13 +83,13 @@ type NotificationSource interface {
     DataSource
     EventNotifier
     // RegisterExtractor adds an extractor after construction.
-    // Extractors known at construction time can be passed to NewNotificationSource directly.
+    // Extractors known at construction time can be passed to New directly.
     RegisterExtractor(e Extractor)
 }
 
 // Extractor processes a batch of Events. It does not manage its own goroutines.
 type Extractor interface {
-    Plugin
+    framework.Plugin
     Extract(ctx context.Context, events []Event) error
 }
 ```
@@ -111,7 +111,7 @@ extractor := inflightrequests.NewInflightRequestsExtractor(ds)
 
 ```go
 ds := datastore.NewStore()
-src, err := datalayer.NewNotificationSource("default", inflightrequests.NewInflightRequestsExtractor(ds))
+src, err := notificationsource.New("default", inflightrequests.NewInflightRequestsExtractor(ds))
 if err != nil { ... }
 if err := src.Start(ctx); err != nil { ... }
 // TODO: pass src to the producer so it can call src.Notify(...)
@@ -127,8 +127,8 @@ consistent with how model-selector plugins are configured via CLI flags.
 
 ## Implementation Steps
 
-1. Add `DataSource`, `DataStore`, `EventNotifier`, `Event`, `NotificationSource`, `Extractor`, payload types to `pkg/framework`
-2. Implement `NotificationSource` (buffered channel + event loop) in `pkg/datalayer/`
+1. Add `DataSource`, `DataStore`, `EventNotifier`, `Event`, `NotificationSource`, `Extractor`, payload types to `pkg/framework/datalayer/`
+2. Implement `NotificationSource` (buffered channel + event loop) in `pkg/plugins/datalayer/notificationsource/`
 3. Implement `InflightRequestsExtractor` in `pkg/plugins/datalayer/inflightrequests/`
 4. Implement `InflightRequestsScorer` in `pkg/framework/modelselector/scorer/inflightrequests/`
 5. Wire DataStore + extractor + NotificationSource in `runner.go`
@@ -142,18 +142,20 @@ consistent with how model-selector plugins are configured via CLI flags.
 ### Payload types
 
 ```go
+// package datalayer (pkg/framework/datalayer/)
+
 // RequestPayload is the Payload for RequestEventType.
 // Carries the already-parsed request — no re-parsing needed.
 type RequestPayload struct {
-    Request *InferenceRequest
+    Request *framework.InferenceRequest
 }
 
 // ResponsePayload is the Payload for ResponseEventType.
 // Duration is computed by the producer and passed directly.
 // All response body fields are accessible via Response.Body.
 type ResponsePayload struct {
-    Request  *InferenceRequest
-    Response *InferenceResponse
+    Request  *framework.InferenceRequest
+    Response *framework.InferenceResponse
     Duration time.Duration
 }
 ```
