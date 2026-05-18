@@ -99,18 +99,20 @@ See [Appendix](#appendix) for payload struct definitions and a full extractor ex
 ### DataStore injection
 
 The `DataStore` is passed directly to each extractor's constructor. This keeps the
-`NotificationSource` a pure event dispatcher with no knowledge of storage, and avoids
-routing the store through `framework.Handle`.
+`NotificationSource` a pure event dispatcher with no knowledge of storage, and avoids routing the store through `framework.Handle`.
+
+The concrete implementation lives in `pkg/datastore/inmemory`, separate from the
+`pkg/datastore.Datastore` interface, to make room for future backends (e.g. Redis):
 
 ```go
-ds := datastore.NewStore()
+ds := inmemory.NewDatastore()
 extractor := inflightrequests.NewInflightRequestsExtractor(ds)
 ```
 
 ### Registration (`runner.go`)
 
 ```go
-ds := datastore.NewStore()
+ds := inmemory.NewDatastore()
 src, err := notificationsource.New("default", inflightrequests.NewInflightRequestsExtractor(ds))
 if err != nil { ... }
 if err := src.Start(ctx); err != nil { ... }
