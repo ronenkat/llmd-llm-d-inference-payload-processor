@@ -34,7 +34,7 @@ const (
 )
 
 // compile-time interface assertion
-var _ framework.Extractor = &InflightRequestsExtractor{}
+var _ fwdatalayer.Extractor = &InflightRequestsExtractor{}
 
 // Factory creates a InflightRequestsExtractor with a nil DataStore.
 // The factory path is limited: the DataStore is not available via framework.Handle,
@@ -63,11 +63,11 @@ func (r InflightRequestsCount) Clone() fwdatalayer.Cloneable { return r }
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
 type InflightRequestsExtractor struct {
 	name      framework.TypedName
-	dataStore framework.DataStore
+	dataStore fwdatalayer.DataStore
 	counters  map[string]InflightRequestsCount
 }
 
-func NewInflightRequestsExtractor(ds framework.DataStore) *InflightRequestsExtractor {
+func NewInflightRequestsExtractor(ds fwdatalayer.DataStore) *InflightRequestsExtractor {
 	return &InflightRequestsExtractor{
 		name:      framework.TypedName{Type: PluginType, Name: PluginType},
 		dataStore: ds,
@@ -83,13 +83,13 @@ func (e *InflightRequestsExtractor) WithName(name string) *InflightRequestsExtra
 	return e
 }
 
-func (e *InflightRequestsExtractor) Extract(_ context.Context, events []framework.Event) error {
+func (e *InflightRequestsExtractor) Extract(_ context.Context, events []fwdatalayer.Event) error {
 	updated := map[string]InflightRequestsCount{}
 
 	for _, ev := range events {
 		switch ev.Type {
-		case framework.RequestEventType:
-			p, ok := ev.Payload.(framework.RequestPayload)
+		case fwdatalayer.RequestEventType:
+			p, ok := ev.Payload.(fwdatalayer.RequestPayload)
 			if !ok {
 				continue
 			}
@@ -104,8 +104,8 @@ func (e *InflightRequestsExtractor) Extract(_ context.Context, events []framewor
 			e.counters[model] = c
 			updated[model] = c
 
-		case framework.ResponseEventType:
-			p, ok := ev.Payload.(framework.ResponsePayload)
+		case fwdatalayer.ResponseEventType:
+			p, ok := ev.Payload.(fwdatalayer.ResponsePayload)
 			if !ok {
 				continue
 			}

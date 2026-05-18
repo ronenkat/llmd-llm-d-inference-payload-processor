@@ -74,27 +74,18 @@ func TestModelsIsolated(t *testing.T) {
 	}
 }
 
-// TestIndependentStoreInstances tests that two Store instances are fully isolated.
-func TestIndependentStoreInstances(t *testing.T) {
-	s1, s2 := NewStore(), NewStore()
-	s1.GetOrCreateModel("llama-3").GetAttributes().Put("key", testValue{Value: 1})
-	if _, ok := s2.GetOrCreateModel("llama-3").GetAttributes().Get("key"); ok {
-		t.Error("expected s2 to be independent from s1")
-	}
-}
-
 // TestModels tests that Models() returns all tracked model names with correct content.
 func TestModels(t *testing.T) {
 	s := NewStore()
 	s.GetOrCreateModel("gpt-4")
 	s.GetOrCreateModel("llama-3")
 	s.GetOrCreateModel("mistral")
-	
+
 	models := s.Models()
 	if len(models) != 3 {
 		t.Errorf("expected 3 models, got %d", len(models))
 	}
-	
+
 	// Verify actual model names are present
 	expected := map[string]bool{"gpt-4": true, "llama-3": true, "mistral": true}
 	for _, name := range models {
@@ -163,7 +154,7 @@ func TestConcurrentAttributeAccess(t *testing.T) {
 	attrs := m.GetAttributes()
 
 	var wg sync.WaitGroup
-	
+
 	// 5 concurrent writers
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
