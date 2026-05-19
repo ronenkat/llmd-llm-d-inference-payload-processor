@@ -84,7 +84,10 @@ The `PrefixIndexer` interface is added to avoid import cycles:
 
 ```go
 type PrefixIndexer interface {
-    // Methods defined by implementation
+	Get(hash BlockHash) ModelSet
+	Add(hashes []BlockHash, model PrefixModel)
+	RemoveModel(modelID ModelID)
+	Models() []ModelID
 }
 ```
 
