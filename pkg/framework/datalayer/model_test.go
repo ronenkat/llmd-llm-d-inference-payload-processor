@@ -16,11 +16,21 @@ limitations under the License.
 
 package datalayer
 
-// Datastore is the interface for reading and updating the model store.
-type Datastore interface {
-	GetOrCreateModel(name string) Model
-	DeleteModel(name string)
-	Models() []string
-}
+import "testing"
 
-// Made with Bob
+// Verifies non-nil model
+// Verifies name is preserved
+// Verifies attributes are initialized
+func TestNewModel(t *testing.T) {
+	m := NewModel("test-model")
+
+	if m == nil {
+		t.Fatal("expected model to be non-nil")
+	}
+	if got := m.GetName(); got != "test-model" {
+		t.Fatalf("expected model name %q, got %q", "test-model", got)
+	}
+	if m.GetAttributes() == nil {
+		t.Fatal("expected model attributes to be initialized")
+	}
+}
