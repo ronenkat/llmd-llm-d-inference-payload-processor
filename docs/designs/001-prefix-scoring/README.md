@@ -40,6 +40,10 @@ The hash function implementation uses the xxHash algorithm for fast, high-qualit
 
 1. **Block-based Hashing**: The request prompt is divided into fixed-size text blocks. Each block is hashed independently, creating a sequence of `BlockHash` values.
 
+   ```
+   type BlockHash uint64
+   ```
+
 2. **Chained Hashing**: To ensure that identical prefixes in different positions produce different hashes, each block hash incorporates the previous block's hash:
    ```
    hash(block[i]) = xxhash(block[i].content + hash(block[i-1]))
