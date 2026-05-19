@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package inflightrequests
+package requestmetadata
 
 import (
 	"context"
@@ -26,33 +26,33 @@ import (
 
 const (
 	// PluginType is the identifier used when registering this extractor.
-	PluginType = "inflight-requests-extractor"
+	PluginType = "request-metadata-extractor"
 
-	// InflightRequestsAttributeKey is the attribute key written to each model's attribute store.
-	InflightRequestsAttributeKey = "inflight-requests"
+	// RequestMetadataAttributeKey is the attribute key written to each model's attribute store.
+	RequestMetadataAttributeKey = "request-metadata"
 )
 
 // compile-time interface assertion
-var _ datalayer.Extractor = &InflightRequestsExtractor{}
+var _ datalayer.Extractor = &RequestMetadataExtractor{}
 
-// ExtractorFactory creates a InflightRequestsExtractor with a nil DataStore.
+// ExtractorFactory creates a RequestMetadataExtractor with a nil DataStore.
 // The factory path is limited: the DataStore is not available via framework.Handle,
-// so the created extractor cannot write to the store. Use NewInflightRequestsExtractor
+// so the created extractor cannot write to the store. Use NewRequestMetadataExtractor
 // directly when constructing for production use.
 func ExtractorFactory(name string, _ json.RawMessage, _ framework.Handle) (framework.Plugin, error) {
-	return NewInflightRequestsExtractor(nil).WithName(name), nil
+	return NewRequestMetadataExtractor(nil).WithName(name), nil
 }
 
-// InflightRequestsCount holds in-flight request and token counts for one model.
-type InflightRequestsCount struct {
+// RequestMetadataCount holds in-flight request and token counts for one model.
+type RequestMetadataCount struct {
 	Requests int64
 	Tokens   int64
 }
 
-func (r InflightRequestsCount) Clone() datalayer.Cloneable { return r }
+func (r RequestMetadataCount) Clone() datalayer.Cloneable { return r }
 
-// InflightRequestsExtractor tracks in-flight request counts and token sums per model.
-// It writes InflightRequestsCount to each model's InflightRequestsAttributeKey attribute.
+// RequestMetadataExtractor tracks in-flight request counts and token sums per model.
+// It writes RequestMetadataCount to each model's RequestMetadataAttributeKey attribute.
 //
 // Extract is assumed to be called from a single goroutine (the NotificationSource event loop).
 // If parallel dispatch is introduced, add a sync.Mutex around counters and the DataStore write.
@@ -60,30 +60,30 @@ func (r InflightRequestsCount) Clone() datalayer.Cloneable { return r }
 // TODO: counters leak if a request fails without a corresponding ResponseEventType (e.g. connection
 // drop, upstream error, context cancellation). The call site should fire a
 // synthetic ResponseEventType in its error/EOF path to keep counts accurate.
-type InflightRequestsExtractor struct {
+type RequestMetadataExtractor struct {
 	typedName framework.TypedName
 	dataStore datalayer.DataStore
-	counters  map[string]InflightRequestsCount
+	counters  map[string]RequestMetadataCount
 }
 
-func NewInflightRequestsExtractor(ds datalayer.DataStore) *InflightRequestsExtractor {
-	return &InflightRequestsExtractor{
+func NewRequestMetadataExtractor(ds datalayer.DataStore) *RequestMetadataExtractor {
+	return &RequestMetadataExtractor{
 		typedName: framework.TypedName{Type: PluginType, Name: PluginType},
 		dataStore: ds,
-		counters:  make(map[string]InflightRequestsCount),
+		counters:  make(map[string]RequestMetadataCount),
 	}
 }
 
-func (e *InflightRequestsExtractor) TypedName() framework.TypedName { return e.typedName }
+func (e *RequestMetadataExtractor) TypedName() framework.TypedName { return e.typedName }
 
 // WithName sets the instance name, used by the factory when the plugin is configured by name.
-func (e *InflightRequestsExtractor) WithName(name string) *InflightRequestsExtractor {
+func (e *RequestMetadataExtractor) WithName(name string) *RequestMetadataExtractor {
 	e.typedName.Name = name
 	return e
 }
 
-func (e *InflightRequestsExtractor) Extract(_ context.Context, events []datalayer.Event) error {
-	updated := map[string]InflightRequestsCount{}
+func (e *RequestMetadataExtractor) Extract(_ context.Context, events []datalayer.Event) error {
+	updated := map[string]RequestMetadataCount{}
 
 	for _, ev := range events {
 		switch ev.Type {
@@ -122,7 +122,7 @@ func (e *InflightRequestsExtractor) Extract(_ context.Context, events []datalaye
 	}
 
 	for model, c := range updated {
-		e.dataStore.GetOrCreateModel(model).GetAttributes().Put(InflightRequestsAttributeKey, c)
+		e.dataStore.GetOrCreateModel(model).GetAttributes().Put(RequestMetadataAttributeKey, c)
 	}
 	return nil
 }
