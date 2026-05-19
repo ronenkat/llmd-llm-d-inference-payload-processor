@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The llm-d Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,13 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package datastore
+package internal
 
-import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
-
-// Datastore is the interface for reading and updating the model store.
-type Datastore interface {
-	GetOrCreateModel(name string) datalayer.Model
-	DeleteModel(name string)
-	Models() []string
-}
+import (
+	// Keep a reference to the code generators so they are not removed by `go mod tidy`
+	_ "k8s.io/code-generator"
+)

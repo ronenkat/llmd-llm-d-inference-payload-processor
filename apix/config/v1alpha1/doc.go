@@ -14,13 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package datastore
-
-import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/datalayer"
-
-// Datastore is the interface for reading and updating the model store.
-type Datastore interface {
-	GetOrCreateModel(name string) datalayer.Model
-	DeleteModel(name string)
-	Models() []string
-}
+// Package v1alpha1 contains API Schema definitions for the
+// llm-d.ai API group.
+//
+// +kubebuilder:object:generate=true
+// +groupName=llm-d.ai
+package v1alpha1
