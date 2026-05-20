@@ -40,11 +40,14 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore/inmemory"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/random"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/weightedrandom"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/metrics"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/basemodelextractor"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/bodyfieldtoheader"
-	inflightrequests "github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/datalayer/inflightrequests"
 	notificationsource "github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/datalayer/notificationsource"
+	requestmetadata "github.com/llm-d/llm-d-inference-payload-processor/pkg/plugins/datalayer/requestmetadata"
 	runserver "github.com/llm-d/llm-d-inference-payload-processor/pkg/server"
 	"github.com/llm-d/llm-d-inference-payload-processor/version"
 )
@@ -223,9 +226,9 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	// Wire the inflight-requests data pipeline: extractor → notification source.
+	// Wire the request-metadata data pipeline: extractor → notification source.
 	// TODO: config-driven path does not yet support NotificationSource + extractors.
-	notifSrc, err := notificationsource.New("default", inflightrequests.NewInflightRequestsExtractor(ds))
+	notifSrc, err := notificationsource.New("default", requestmetadata.NewRequestMetadataExtractor(ds))
 	if err != nil {
 		setupLog.Error(err, "failed to create notification source")
 		return err
@@ -268,8 +271,13 @@ func (r *Runner) Run(ctx context.Context) error {
 func (r *Runner) registerInTreePlugins() {
 	framework.Register(bodyfieldtoheader.BodyFieldToHeaderPluginType, bodyfieldtoheader.BodyFieldToHeaderPluginFactory)
 	framework.Register(basemodelextractor.BaseModelToHeaderPluginType, basemodelextractor.BaseModelToHeaderPluginFactory)
-	framework.Register(inflightrequests.PluginType, inflightrequests.ExtractorFactory)
+	framework.Register(requestmetadata.PluginType, requestmetadata.ExtractorFactory)
 	framework.Register(notificationsource.PluginType, notificationsource.Factory)
+	// register model selector plugins
+	framework.Register(random.RandomPickerType, random.RandomPickerFactory)
+	framework.Register(maxscore.MaxScorePickerType, maxscore.MaxScorePickerFactory)
+	framework.Register(weightedrandom.WeightedRandomPickerType, weightedrandom.WeightedRandomPickerFactory)
+
 }
 
 // registerHealthServer adds the Health gRPC server as a Runnable to the given manager.

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package inflightrequests
+package requestmetadata
 
 import (
 	"context"
@@ -54,34 +54,34 @@ func makeResponseEvent(model string, durationMs int, maxTokens float64) dlsrc.Ev
 }
 
 // getInflightRequests asserts the inflight-requests attribute exists for model and returns it.
-func getInflightRequests(t testing.TB, ds datastore.Datastore, model string) InflightRequestsCount {
+func getRequestMetadata(t testing.TB, ds datastore.Datastore, model string) RequestMetadataCount {
 	t.Helper()
-	val, ok := ds.GetOrCreateModel(model).GetAttributes().Get(InflightRequestsAttributeKey)
+	val, ok := ds.GetOrCreateModel(model).GetAttributes().Get(RequestMetadataAttributeKey)
 	if !ok {
-		t.Fatalf("expected %q attribute for model %q", InflightRequestsAttributeKey, model)
+		t.Fatalf("expected %q attribute for model %q", RequestMetadataAttributeKey, model)
 	}
-	rc, ok := val.(InflightRequestsCount)
+	rc, ok := val.(RequestMetadataCount)
 	if !ok {
-		t.Fatalf("expected InflightRequestsCount for model %q", model)
+		t.Fatalf("expected RequestMetadataCount for model %q", model)
 	}
 	return rc
 }
 
-func newInflightRequestsTest(t *testing.T) (*InflightRequestsExtractor, datastore.Datastore) {
+func newRequestMetadataTest(t *testing.T) (*RequestMetadataExtractor, datastore.Datastore) {
 	t.Helper()
 	ds := datastore.NewFakeDataStore()
-	return NewInflightRequestsExtractor(ds), ds
+	return NewRequestMetadataExtractor(ds), ds
 }
 
 func TestRequestIncrementsCounter(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+	ext, ds := newRequestMetadataTest(t)
 
 	batch := []dlsrc.Event{makeRequestEvent("m1", 100)}
 	if err := ext.Extract(context.Background(), batch); err != nil {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	rc := getInflightRequests(t, ds, "m1")
+	rc := getRequestMetadata(t, ds, "m1")
 	if rc.Requests != 1 {
 		t.Errorf("expected Requests=1, got %d", rc.Requests)
 	}
@@ -91,7 +91,7 @@ func TestRequestIncrementsCounter(t *testing.T) {
 }
 
 func TestResponseDecrementsCounter(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+	ext, ds := newRequestMetadataTest(t)
 
 	// Response carries the original request's max_tokens so the extractor can decrement correctly.
 	batch := []dlsrc.Event{
@@ -102,7 +102,7 @@ func TestResponseDecrementsCounter(t *testing.T) {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	rc := getInflightRequests(t, ds, "m1")
+	rc := getRequestMetadata(t, ds, "m1")
 	if rc.Requests != 0 {
 		t.Errorf("expected Requests=0, got %d", rc.Requests)
 	}
@@ -112,7 +112,7 @@ func TestResponseDecrementsCounter(t *testing.T) {
 }
 
 func TestCounterFloorsAtZero(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+	ext, ds := newRequestMetadataTest(t)
 
 	// Response with no prior request — both counters must floor at zero.
 	batch := []dlsrc.Event{makeResponseEvent("m1", 50, 100)}
@@ -120,7 +120,7 @@ func TestCounterFloorsAtZero(t *testing.T) {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	rc := getInflightRequests(t, ds, "m1")
+	rc := getRequestMetadata(t, ds, "m1")
 	if rc.Requests != 0 {
 		t.Errorf("expected Requests=0, got %d", rc.Requests)
 	}
@@ -129,8 +129,8 @@ func TestCounterFloorsAtZero(t *testing.T) {
 	}
 }
 
-func TestInflightRequestsMultipleModels(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+func TestRequestMetadataMultipleModels(t *testing.T) {
+	ext, ds := newRequestMetadataTest(t)
 
 	batch := []dlsrc.Event{
 		makeRequestEvent("m1", 10),
@@ -140,19 +140,19 @@ func TestInflightRequestsMultipleModels(t *testing.T) {
 		t.Fatalf("Extract failed: %v", err)
 	}
 
-	rc1 := getInflightRequests(t, ds, "m1")
+	rc1 := getRequestMetadata(t, ds, "m1")
 	if rc1.Requests != 1 || rc1.Tokens != 10 {
 		t.Errorf("m1: expected {Requests:1, Tokens:10}, got %+v", rc1)
 	}
 
-	rc2 := getInflightRequests(t, ds, "m2")
+	rc2 := getRequestMetadata(t, ds, "m2")
 	if rc2.Requests != 1 || rc2.Tokens != 20 {
 		t.Errorf("m2: expected {Requests:1, Tokens:20}, got %+v", rc2)
 	}
 }
 
-func TestInflightRequestsUnknownEventTypeIgnored(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+func TestRequestMetadataUnknownEventTypeIgnored(t *testing.T) {
+	ext, ds := newRequestMetadataTest(t)
 
 	batch := []dlsrc.Event{{Type: "unknown"}}
 	if err := ext.Extract(context.Background(), batch); err != nil {
@@ -165,8 +165,8 @@ func TestInflightRequestsUnknownEventTypeIgnored(t *testing.T) {
 	}
 }
 
-func TestInflightRequestsMissingModelFieldIgnored(t *testing.T) {
-	ext, ds := newInflightRequestsTest(t)
+func TestRequestMetadataMissingModelFieldIgnored(t *testing.T) {
+	ext, ds := newRequestMetadataTest(t)
 
 	// Payload without a "model" key — no counter should be updated.
 	req := framework.NewInferenceRequest()
