@@ -87,6 +87,6 @@ type PollingSource interface {
 
 // A Collector is a poll mechanism to fetch data from a configured data source.
 type Collector interface {
-	framework.Plugin
+	plugin.Plugin
 	Poll(ctx context.Context) (any, error)
 }
