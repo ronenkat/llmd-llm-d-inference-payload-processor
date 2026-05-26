@@ -94,7 +94,7 @@ func TestLoadRawConfiguration(t *testing.T) {
 				Profiles: []configapi.Profile{
 					{
 						Name: "default",
-						Plugins: configapi.ProfilePlugins{
+						Plugins: &configapi.ProfilePlugins{
 							Request: []configapi.PluginRef{
 								{
 									PluginRef: bodyfieldtoheader.BodyFieldToHeaderPluginType,
