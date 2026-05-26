@@ -57,21 +57,21 @@ type PayloadProcessorConfig struct {
 }
 
 func (cfg PayloadProcessorConfig) String() string {
-	contents := strings.Builder{}
+	contents := &strings.Builder{}
 
-	contents.WriteString(fmt.Sprintf("Plugins: %v", cfg.Plugins))
+	fmt.Fprintf(contents, "Plugins: %v", cfg.Plugins)
 
 	if cfg.PreProcessing != nil {
-		contents.WriteString(fmt.Sprintf(", PreProcessing: %v", cfg.PreProcessing))
+		fmt.Fprintf(contents, ", PreProcessing: %v", cfg.PreProcessing)
 	}
 	if cfg.ProfilePicker != nil {
-		contents.WriteString(fmt.Sprintf(", ProfilePicker: %v", cfg.ProfilePicker))
+		fmt.Fprintf(contents, ", ProfilePicker: %v", cfg.ProfilePicker)
 	}
 	if len(cfg.Profiles) > 0 {
-		contents.WriteString(fmt.Sprintf(", Profiles: %v", cfg.Profiles))
+		fmt.Fprintf(contents, ", Profiles: %v", cfg.Profiles)
 	}
 	if cfg.PostProcessing != nil {
-		contents.WriteString(fmt.Sprintf(", PostProcessing: %v", cfg.PostProcessing))
+		fmt.Fprintf(contents, ", PostProcessing: %v", cfg.PostProcessing)
 	}
 
 	return "{" + contents.String() + "}"
@@ -184,7 +184,5 @@ type PluginRef struct {
 }
 
 func (pr PluginRef) String() string {
-	var parts []string
-	parts = append(parts, "PluginRef: "+pr.PluginRef)
-	return "{" + strings.Join(parts, ", ") + "}"
+	return fmt.Sprintf("{PluginRef: %s}", pr.PluginRef)
 }
