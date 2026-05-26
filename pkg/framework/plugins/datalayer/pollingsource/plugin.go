@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pollingmodels
+package pollingsource
 
 import (
 	"context"
@@ -31,17 +31,17 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 )
 
-const PluginType = "polling-models"
+const PluginType = "polling-source"
 
 // compile-time interface assertion
-var _ dlsrc.PollingSource = &PollingModels{}
+var _ dlsrc.PollingSource = &PollingSource{}
 
 type collectorEntry struct {
 	collector dlsrc.Collector
 	frequency time.Duration
 }
 
-type PollingModels struct {
+type PollingSource struct {
 	name       plugin.TypedName
 	collectors []collectorEntry
 	mu         sync.Mutex
@@ -52,6 +52,7 @@ type PollingModels struct {
 }
 
 // Factory is the factory function for PollingSource.
+// TODO: configuration to list collectors to enable.
 func Factory(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
 	src, err := New(name)
 	if err != nil {
@@ -65,23 +66,23 @@ func New(name string) (dlsrc.PollingSource, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name is required for plugin '%s'", PluginType)
 	}
-	return &PollingModels{
+	return &PollingSource{
 		name: plugin.TypedName{Type: PluginType, Name: name},
 	}, nil
 }
 
-func (p *PollingModels) TypedName() plugin.TypedName { return p.name }
+func (p *PollingSource) TypedName() plugin.TypedName { return p.name }
 
 // RegisterCollector adds a Collector to be polled at the given frequency.
 // Safe to call before Start.
-func (p *PollingModels) RegisterCollector(c dlsrc.Collector, frequency time.Duration) {
+func (p *PollingSource) RegisterCollector(c dlsrc.Collector, frequency time.Duration) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.collectors = append(p.collectors, collectorEntry{collector: c, frequency: frequency})
 }
 
 // Start launches one polling goroutine per registered Collector. Returns an error if called more than once.
-func (p *PollingModels) Start(ctx context.Context) error {
+func (p *PollingSource) Start(ctx context.Context) error {
 	if !p.started.CompareAndSwap(false, true) {
 		return errors.New("PollingSource already started")
 	}
@@ -100,14 +101,14 @@ func (p *PollingModels) Start(ctx context.Context) error {
 }
 
 // Stop cancels all polling goroutines and waits for them to exit.
-func (p *PollingModels) Stop() {
+func (p *PollingSource) Stop() {
 	if p.cancel != nil {
 		p.cancel()
 		p.wg.Wait()
 	}
 }
 
-func (p *PollingModels) runCollector(ctx context.Context, c dlsrc.Collector, freq time.Duration) {
+func (p *PollingSource) runCollector(ctx context.Context, c dlsrc.Collector, freq time.Duration) {
 	defer p.wg.Done()
 	logger := log.FromContext(ctx).WithName("polling-source")
 
