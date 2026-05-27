@@ -108,7 +108,11 @@ notificationSources:
 const datalayerMissingRefConfigText = `
 apiVersion: llm-d.ai/v1alpha1
 kind: PayloadProcessorConfig
-plugins: []
+plugins:
+- name: test1
+  type: test-plugin
+  parameters:
+    threshold: 10
 notificationSources:
 - pluginRef: does-not-exist
 `
