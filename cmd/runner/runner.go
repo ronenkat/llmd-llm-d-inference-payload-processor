@@ -38,10 +38,10 @@ import (
 	logutil "github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/profiling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/config"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/config/loader"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore/inmemory"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	notificationsource "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/notificationsource"
@@ -77,7 +77,8 @@ type Runner struct {
 	// in the same order the plugin flags are provided.
 	responsePlugins []requesthandling.ResponseProcessor
 
-	customCollectors []prometheus.Collector
+	customCollectors    []prometheus.Collector
+	NotificationSources []datasource.NotificationSource
 }
 
 // WithExecutableName sets the name of the executable containing the runner.
@@ -179,12 +180,12 @@ func (r *Runner) Run(ctx context.Context) error {
 
 	ds := inmemory.NewDatastore()
 
-	theConfig, err := r.loadConfiguration(ctx, opts, mgr, ds, setupLog)
+	err = r.loadConfiguration(ctx, opts, mgr, ds, setupLog)
 	if err != nil {
 		return err
 	}
 
-	for _, src := range theConfig.NotificationSources {
+	for _, src := range r.NotificationSources {
 		if err := mgr.Add(runnable.NoLeaderElection(runnable.DataSourceRunnable(src))); err != nil {
 			setupLog.Error(err, "failed to register notification source", "name", src.TypedName().Name)
 			return err
@@ -220,7 +221,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	return nil
 }
 
-func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore, logger logr.Logger) (*config.Config, error) {
+func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore, logger logr.Logger) error {
 	handle := plugin.NewHandle(ctx, mgr, ds)
 
 	var configBytes []byte
@@ -231,7 +232,7 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 		configBytes, err = os.ReadFile(opts.ConfigFile)
 		if err != nil {
 			logger.Error(err, "failed to load config from a file", "file", opts.ConfigFile)
-			return nil, fmt.Errorf("failed to load config from a file '%s' - %w", opts.ConfigFile, err)
+			return fmt.Errorf("failed to load config from a file '%s' - %w", opts.ConfigFile, err)
 		}
 	}
 
@@ -240,7 +241,7 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 
 	theConfig, err := loader.LoadConfiguration(configBytes, handle, logger)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Hack for now until the ProfilePicker is supported
@@ -253,8 +254,9 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 
 	r.requestPlugins = theConfig.Profiles[profileName].RequestPlugins
 	r.responsePlugins = theConfig.Profiles[profileName].ResponsePlugins
+	r.NotificationSources = theConfig.NotificationSources
 
-	return theConfig, nil
+	return nil
 }
 
 // registerInTreePlugins registers the factory functions of all known payload processor plugins

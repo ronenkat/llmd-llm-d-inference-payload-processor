@@ -79,9 +79,8 @@ func (cfg PayloadProcessorConfig) String() string {
 	if cfg.ProfilePicker != nil {
 		fmt.Fprintf(contents, ", ProfilePicker: %v", cfg.ProfilePicker)
 	}
-	if len(cfg.Profiles) > 0 {
-		fmt.Fprintf(contents, ", Profiles: %v", cfg.Profiles)
-	}
+
+	fmt.Fprintf(contents, ", Profiles: %v", cfg.Profiles)
 	if cfg.PostProcessing != nil {
 		fmt.Fprintf(contents, ", PostProcessing: %v", cfg.PostProcessing)
 	}
