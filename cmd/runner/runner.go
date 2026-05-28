@@ -78,7 +78,7 @@ type Runner struct {
 	responsePlugins []requesthandling.ResponseProcessor
 
 	customCollectors    []prometheus.Collector
-	NotificationSources []datasource.NotificationSource
+	notificationSources []datasource.NotificationSource
 }
 
 // WithExecutableName sets the name of the executable containing the runner.
@@ -185,7 +185,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	for _, src := range r.NotificationSources {
+	for _, src := range r.notificationSources {
 		if err := mgr.Add(runnable.NoLeaderElection(runnable.DataSourceRunnable(src))); err != nil {
 			setupLog.Error(err, "failed to register notification source", "name", src.TypedName().Name)
 			return err
@@ -254,7 +254,7 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 
 	r.requestPlugins = theConfig.Profiles[profileName].RequestPlugins
 	r.responsePlugins = theConfig.Profiles[profileName].ResponsePlugins
-	r.NotificationSources = theConfig.NotificationSources
+	r.notificationSources = theConfig.NotificationSources
 
 	return nil
 }
