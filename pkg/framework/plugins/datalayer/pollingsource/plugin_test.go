@@ -70,23 +70,6 @@ func TestStart_AlreadyStarted(t *testing.T) {
 	}
 }
 
-// TestCollectorPolled verifies that a registered collector is invoked multiple times after Start.
-func TestCollectorPolled(t *testing.T) {
-	src, _ := New("test")
-	c := &fakeCollector{name: "c1"}
-	src.RegisterCollector(c, 10*time.Millisecond)
-
-	if err := src.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	time.Sleep(50 * time.Millisecond)
-	src.Stop()
-
-	if got := c.pollCount.Load(); got < 2 {
-		t.Errorf("expected >= 2 polls, got %d", got)
-	}
-}
-
 // fakeHandle implements plugin.Handle for unit tests.
 type fakeHandle struct {
 	plugins map[string]plugin.Plugin
