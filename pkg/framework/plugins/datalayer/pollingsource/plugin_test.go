@@ -207,6 +207,28 @@ func TestFactoryPluginNotCollector(t *testing.T) {
 	}
 }
 
+// Factory returns an error when a collector has a zero frequency.
+func TestFactoryZeroFrequency(t *testing.T) {
+	c := &fakeCollector{name: "col"}
+	h := newFakeHandle(map[string]plugin.Plugin{"col": c})
+	params := json.RawMessage(`{"collectors":[{"pluginRef":"col","frequency":0}]}`)
+	_, err := Factory("src", params, h)
+	if err == nil {
+		t.Fatal("expected error for zero frequency, got nil")
+	}
+}
+
+// Factory returns an error when a collector has a negative frequency.
+func TestFactoryNegativeFrequency(t *testing.T) {
+	c := &fakeCollector{name: "col"}
+	h := newFakeHandle(map[string]plugin.Plugin{"col": c})
+	params := json.RawMessage(`{"collectors":[{"pluginRef":"col","frequency":-5}]}`)
+	_, err := Factory("src", params, h)
+	if err == nil {
+		t.Fatal("expected error for negative frequency, got nil")
+	}
+}
+
 // TestRegisterCollectorAfterStart verifies that a collector registered after Start is still polled.
 func TestRegisterCollectorAfterStart(t *testing.T) {
 	src, _ := New("test")

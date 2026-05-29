@@ -75,6 +75,9 @@ func Factory(name string, rawParameters json.RawMessage, handle plugin.Handle) (
 
 	collectors := make([]dlsrc.Collector, 0, len(config.Collectors))
 	for _, cc := range config.Collectors {
+		if cc.Frequency <= 0 {
+			return nil, fmt.Errorf("'%s' plugin: collector %q frequency must be a positive integer, got %d", PluginType, cc.PluginRef.PluginRef, cc.Frequency)
+		}
 		p := handle.Plugin(cc.PluginRef.PluginRef)
 		if p == nil {
 			return nil, fmt.Errorf("'%s' plugin: collector plugin %q not found", PluginType, cc.PluginRef.PluginRef)
