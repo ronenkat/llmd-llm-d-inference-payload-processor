@@ -163,6 +163,14 @@ func (p *PollingSource) runCollector(ctx context.Context, c dlsrc.Collector, fre
 	defer p.wg.Done()
 	logger := log.FromContext(ctx).WithName("polling-source")
 
+	poll := func() {
+		if _, err := c.Poll(ctx); err != nil {
+			logger.Error(err, "collector error", "collector", c.TypedName())
+		}
+	}
+
+	poll()
+
 	ticker := time.NewTicker(freq)
 	defer ticker.Stop()
 
@@ -171,9 +179,7 @@ func (p *PollingSource) runCollector(ctx context.Context, c dlsrc.Collector, fre
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if _, err := c.Poll(ctx); err != nil {
-				logger.Error(err, "collector error", "collector", c.TypedName())
-			}
+			poll()
 		}
 	}
 }
