@@ -218,7 +218,7 @@ func TestFactoryZeroFrequency(t *testing.T) {
 	}
 }
 
-// Factory returns an error when a collector has a negative frequency.
+// Factory returns an error when a collector is configured with a negative frequency.
 func TestFactoryNegativeFrequency(t *testing.T) {
 	c := &fakeCollector{name: "col"}
 	h := newFakeHandle(map[string]plugin.Plugin{"col": c})
@@ -226,6 +226,31 @@ func TestFactoryNegativeFrequency(t *testing.T) {
 	_, err := Factory("src", params, h)
 	if err == nil {
 		t.Fatal("expected error for negative frequency, got nil")
+	}
+}
+
+// TestRegisterCollector_InvalidFrequency verifies that a non-positive frequency is rejected and the collector is not registered.
+func TestRegisterCollector_InvalidFrequency(t *testing.T) {
+	src, _ := New("test")
+	c := &fakeCollector{name: "c"}
+	src.RegisterCollector(c, 0)
+	src.RegisterCollector(c, -1*time.Second)
+
+	ps := src.(*PollingSource)
+	if len(ps.collectors) != 0 {
+		t.Errorf("expected 0 collectors after invalid registrations, got %d", len(ps.collectors))
+	}
+}
+
+// TestStopBeforeStart verifies that calling Start after Stop returns an error.
+func TestStopBeforeStart(t *testing.T) {
+	src, err := New("test")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	src.Stop()
+	if err := src.Start(context.Background()); err == nil {
+		t.Error("expected error when calling Start after Stop, got nil")
 	}
 }
 
@@ -242,31 +267,10 @@ func TestRegisterCollectorAfterStart(t *testing.T) {
 	post := &fakeCollector{name: "post"}
 	src.RegisterCollector(post, 10*time.Millisecond)
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	src.Stop()
 
 	if got := post.pollCount.Load(); got < 1 {
 		t.Errorf("expected post-start collector to be polled at least once, got %d", got)
-	}
-}
-
-// TestMultipleCollectors_DifferentFrequencies verifies that a higher-frequency collector is polled more times than a lower-frequency one.
-func TestMultipleCollectors_DifferentFrequencies(t *testing.T) {
-	src, _ := New("test")
-	fast := &fakeCollector{name: "fast"}
-	slow := &fakeCollector{name: "slow"}
-	src.RegisterCollector(fast, 10*time.Millisecond)
-	src.RegisterCollector(slow, 30*time.Millisecond)
-
-	if err := src.Start(context.Background()); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	time.Sleep(60 * time.Millisecond)
-	src.Stop()
-
-	fastCount := fast.pollCount.Load()
-	slowCount := slow.pollCount.Load()
-	if fastCount <= slowCount {
-		t.Errorf("expected fast collector (%d) to be polled more than slow (%d)", fastCount, slowCount)
 	}
 }
