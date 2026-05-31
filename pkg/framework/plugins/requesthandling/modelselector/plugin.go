@@ -49,7 +49,7 @@ func ModelSelectorPluginFactory(name string, parameters json.RawMessage, handle 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build model selector profile: %w", err)
 	}
-	return NewModelSelectorPlugin(profile, handle.Datastore()), nil
+	return NewModelSelectorPlugin(profile, handle.Datastore()).WithName(name), nil
 }
 
 // NewModelSelectorPlugin creates a ModelSelector RequestProcessor plugin.

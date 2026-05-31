@@ -43,9 +43,9 @@ type ModelSelector struct {
 	profile *ModelSelectorProfile
 }
 
-// ProfileString returns the string representation of the model selector profile.
-func (s *ModelSelector) ProfileString() string {
-	return s.profile.String()
+// Profile returns the ModelSelectorProfile used by this selector.
+func (s *ModelSelector) Profile() *ModelSelectorProfile {
+	return s.profile
 }
 
 // Select runs the model selection pipeline (Filter → Score → Pick) and returns the selected model.

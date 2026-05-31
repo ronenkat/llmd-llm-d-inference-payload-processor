@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strings"
 	"testing"
 
 	ctrlbuilder "sigs.k8s.io/controller-runtime/pkg/builder"
@@ -33,6 +32,7 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/scorer/costaware"
+	ms "github.com/llm-d/llm-d-inference-payload-processor/pkg/modelselector"
 )
 
 // fakeHandle implements plugin.Handle for unit tests.
@@ -86,9 +86,9 @@ func mustFactory(t *testing.T, parameters json.RawMessage, handle *fakeHandle) *
 	return plug.(*ModelSelectorPlugin)
 }
 
-// profileString returns the profile string of a ModelSelectorPlugin for assertion.
-func profileString(p *ModelSelectorPlugin) string {
-	return p.selector.ProfileString()
+// profile returns the ModelSelectorProfile for inspection in tests.
+func profile(p *ModelSelectorPlugin) *ms.ModelSelectorProfile {
+	return p.selector.Profile()
 }
 
 // TestProcessRequestSelectsFromDatastoreModels checks that the selected model is one of the candidates registered in the datastore.
@@ -134,8 +134,9 @@ func TestTypedName(t *testing.T) {
 // TestFactoryUsesDefaultMaxScorePickerWhenNoPluginsConfigured checks that MaxScorePicker is used as the default when plugins list is empty.
 func TestFactoryUsesDefaultMaxScorePickerWhenNoPluginsConfigured(t *testing.T) {
 	thePlugin := mustFactory(t, json.RawMessage(`{}`), newFakeHandle("model-a"))
-	if !containsSubstring(profileString(thePlugin), maxscore.MaxScorePickerType) {
-		t.Errorf("expected default picker type %q in profile %q", maxscore.MaxScorePickerType, profileString(thePlugin))
+	picker := profile(thePlugin).Picker()
+	if picker == nil || picker.TypedName().Type != maxscore.MaxScorePickerType {
+		t.Errorf("expected default picker type %q, got %v", maxscore.MaxScorePickerType, picker)
 	}
 }
 
@@ -146,8 +147,12 @@ func TestFactoryWiresScorerFromParameters(t *testing.T) {
 	handle.AddPlugin(scorer.TypedName().Name, scorer)
 
 	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"cost-scorer","weight":2.0}]}`), handle)
-	if !containsSubstring(profileString(p), costaware.CostScorerType) {
-		t.Errorf("expected scorer type %q in profile %q", costaware.CostScorerType, profileString(p))
+	scorers := profile(p).Scorers()
+	if len(scorers) != 1 || scorers[0].TypedName().Type != costaware.CostScorerType {
+		t.Errorf("expected one scorer of type %q, got %v", costaware.CostScorerType, scorers)
+	}
+	if scorers[0].Weight() != 2.0 {
+		t.Errorf("expected scorer weight 2.0, got %v", scorers[0].Weight())
 	}
 }
 
@@ -158,8 +163,9 @@ func TestFactoryWiresPickerFromParameters(t *testing.T) {
 	handle.AddPlugin(picker.TypedName().Name, picker)
 
 	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"max-score-picker"}]}`), handle)
-	if !containsSubstring(profileString(p), maxscore.MaxScorePickerType) {
-		t.Errorf("expected picker type %q in profile %q", maxscore.MaxScorePickerType, profileString(p))
+	got := profile(p).Picker()
+	if got == nil || got.TypedName().Type != maxscore.MaxScorePickerType {
+		t.Errorf("expected picker type %q, got %v", maxscore.MaxScorePickerType, got)
 	}
 }
 
@@ -228,11 +234,11 @@ func TestFactoryPluginImplementingBothScorerAndFilter(t *testing.T) {
 	handle.AddPlugin("dual", dual)
 
 	p := mustFactory(t, json.RawMessage(`{"plugins":[{"pluginRef":"dual","weight":1.0}]}`), handle)
-	if !containsSubstring(profileString(p), "dual") {
-		t.Errorf("expected dual plugin in profile %q", profileString(p))
+	prof := profile(p)
+	if len(prof.Filters()) != 1 || prof.Filters()[0].TypedName().Name != "dual" {
+		t.Errorf("expected dual in filters, got %v", prof.Filters())
 	}
-}
-
-func containsSubstring(s, sub string) bool {
-	return strings.Contains(s, sub)
+	if len(prof.Scorers()) != 1 || prof.Scorers()[0].TypedName().Name != "dual" {
+		t.Errorf("expected dual in scorers, got %v", prof.Scorers())
+	}
 }
