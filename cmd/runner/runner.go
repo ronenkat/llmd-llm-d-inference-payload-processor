@@ -45,7 +45,8 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	notificationsource "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/notificationsource"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/requestmetadata"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/pollingsource"
+	requestmetadata "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/requestmetadata"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/random"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/weightedrandom"
@@ -79,6 +80,7 @@ type Runner struct {
 
 	customCollectors    []prometheus.Collector
 	notificationSources []datasource.NotificationSource
+	pollingSources      []datasource.PollingSource
 }
 
 // WithExecutableName sets the name of the executable containing the runner.
@@ -191,8 +193,17 @@ func (r *Runner) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, src := range r.pollingSources {
+		if err := src.Start(ctx); err != nil {
+			setupLog.Error(err, "failed to start polling source", "name", src.TypedName().Name)
+			return err
+		}
+	}
 	defer func() {
 		for _, src := range r.notificationSources {
+			src.Stop()
+		}
+		for _, src := range r.pollingSources {
 			src.Stop()
 		}
 	}()
@@ -252,6 +263,7 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 	r.profilePicker = theConfig.ProfilePicker
 	r.profiles = theConfig.Profiles
 	r.notificationSources = theConfig.NotificationSources
+	r.pollingSources = theConfig.PollingSources
 
 	return nil
 }
@@ -263,6 +275,7 @@ func (r *Runner) registerInTreePlugins() {
 	plugin.Register(basemodelextractor.BaseModelToHeaderPluginType, basemodelextractor.BaseModelToHeaderPluginFactory)
 	plugin.Register(requestmetadata.PluginType, requestmetadata.ExtractorFactory)
 	plugin.Register(notificationsource.PluginType, notificationsource.Factory)
+	plugin.Register(pollingsource.PluginType, pollingsource.Factory)
 	// register model selector plugins
 	plugin.Register(random.RandomPickerType, random.RandomPickerFactory)
 	plugin.Register(maxscore.MaxScorePickerType, maxscore.MaxScorePickerFactory)
