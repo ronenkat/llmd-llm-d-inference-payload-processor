@@ -45,7 +45,8 @@ type collectorEntry struct {
 // Processor is the unified datalayer component. It drives one polling goroutine
 // per registered Collector and runs a single event loop that dispatches events
 // to all registered Extractors.
-// RegisterCollector and RegisterExtractor may be called before or after Start.
+// RegisterExtractor must be called before Start.
+// RegisterCollector may be called before or after Start.
 // Start and Stop must each be called at most once.
 type Processor struct {
 	name plugin.TypedName
@@ -79,11 +80,14 @@ func NewProcessor() *Processor {
 
 func (p *Processor) TypedName() plugin.TypedName { return p.name }
 
-// RegisterExtractor adds an Extractor to receive events. Safe to call before Start.
+// RegisterExtractor adds an Extractor to receive events. Must be called before Start.
 func (p *Processor) RegisterExtractor(e datasource.Extractor) {
-	p.mu.Lock()
+	if p.started {
+		log.Log.Error(nil, "processor: RegisterExtractor called after Start; ignoring",
+			"extractor", e.TypedName())
+		return
+	}
 	p.extractors = append(p.extractors, e)
-	p.mu.Unlock()
 }
 
 // RegisterCollector adds a Collector to be polled at the given frequency.
@@ -199,11 +203,7 @@ func (p *Processor) eventLoop(ctx context.Context, ready chan struct{}) {
 			close(p.notifyDone)
 			return
 		case e := <-p.ch:
-			p.mu.Lock()
-			extractors := make([]datasource.Extractor, len(p.extractors))
-			copy(extractors, p.extractors)
-			p.mu.Unlock()
-			for _, ext := range extractors {
+			for _, ext := range p.extractors {
 				if err := ext.Extract(ctx, []datasource.Event{e}); err != nil {
 					logger.Error(err, "extractor error", "extractor", ext.TypedName())
 				}
