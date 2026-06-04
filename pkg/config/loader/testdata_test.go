@@ -105,15 +105,24 @@ profiles:
     - pluginRef: test-response-processor
 `
 
-// datalayerSuccessConfigText has a valid datalayer reference.
+// datalayerSuccessConfigText has valid datalayer references across all three categories.
 const datalayerSuccessConfigText = `
 apiVersion: llm-d.ai/v1alpha1
 kind: PayloadProcessorConfig
 plugins:
-- name: test1
+- name: test-col
+  type: test-collector
+- name: test-ext
   type: test-extractor
+- name: test-ds
+  type: test-datasource
 datalayer:
-- pluginRef: test1
+  collectors:
+  - pluginRef: test-col
+  extractors:
+  - pluginRef: test-ext
+  datasources:
+  - pluginRef: test-ds
 `
 
 // datalayerMissingRefConfigText references a plugin that does not exist.
@@ -126,7 +135,8 @@ plugins:
   parameters:
     threshold: 10
 datalayer:
-- pluginRef: does-not-exist
+  extractors:
+  - pluginRef: does-not-exist
 `
 
 // --- Invalid Configurations (Syntax/Structure) ---

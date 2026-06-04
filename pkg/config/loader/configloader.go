@@ -74,8 +74,7 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, processor datas
 		return nil, err
 	}
 
-	datalayerSources, err := buildDatalayerSources(rawConfig.Datalayer, handle, processor)
-	if err != nil {
+	if err = buildDatalayerSources(rawConfig.Datalayer, handle, processor); err != nil {
 		logger.Error(err, "failed to load one or more datalayer sources")
 		return nil, err
 	}
@@ -86,39 +85,55 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, processor datas
 	}
 
 	return &config.Config{
-		ProfilePicker:    profilePicker,
-		Profiles:         profiles,
-		DatalayerSources: datalayerSources,
+		ProfilePicker: profilePicker,
+		Profiles:      profiles,
 	}, nil
 }
 
-func buildDatalayerSources(refs []configapi.PluginRef, handle plugin.Handle, processor datasource.DatalayerProcessor) ([]plugin.Plugin, error) {
-	sources := make([]plugin.Plugin, 0, len(refs))
-	for _, ref := range refs {
+func buildDatalayerSources(cfg *configapi.DatalayerConfig, handle plugin.Handle, processor datasource.DatalayerProcessor) error {
+	if cfg == nil {
+		return nil
+	}
+	for _, ref := range cfg.Collectors {
 		p := handle.Plugin(ref.PluginRef)
 		if p == nil {
-			return nil, fmt.Errorf("there is no plugin named %s", ref.PluginRef)
+			return fmt.Errorf("there is no plugin named %s", ref.PluginRef)
 		}
-		sources = append(sources, p)
-		_, isCollector := p.(datasource.Collector)
-		_, isExtractor := p.(datasource.Extractor)
-		_, isDataSource := p.(datasource.DataSource)
-		if !isCollector && !isExtractor && !isDataSource {
-			return nil, fmt.Errorf("plugin %q is not a Collector, Extractor, or DataSource", ref.PluginRef)
+		c, ok := p.(datasource.Collector)
+		if !ok {
+			return fmt.Errorf("plugin %q is not a Collector", ref.PluginRef)
 		}
 		if processor != nil {
-			if c, ok := p.(datasource.Collector); ok {
-				processor.RegisterCollector(c, c.CollectorFrequency())
-			}
-			if e, ok := p.(datasource.Extractor); ok {
-				processor.RegisterExtractor(e)
-			}
-			if d, ok := p.(datasource.DataSource); ok {
-				processor.RegisterDatasource(d)
-			}
+			processor.RegisterCollector(c, c.CollectorFrequency())
 		}
 	}
-	return sources, nil
+	for _, ref := range cfg.Extractors {
+		p := handle.Plugin(ref.PluginRef)
+		if p == nil {
+			return fmt.Errorf("there is no plugin named %s", ref.PluginRef)
+		}
+		e, ok := p.(datasource.Extractor)
+		if !ok {
+			return fmt.Errorf("plugin %q is not an Extractor", ref.PluginRef)
+		}
+		if processor != nil {
+			processor.RegisterExtractor(e)
+		}
+	}
+	for _, ref := range cfg.Datasources {
+		p := handle.Plugin(ref.PluginRef)
+		if p == nil {
+			return fmt.Errorf("there is no plugin named %s", ref.PluginRef)
+		}
+		d, ok := p.(datasource.DataSource)
+		if !ok {
+			return fmt.Errorf("plugin %q is not a DataSource", ref.PluginRef)
+		}
+		if processor != nil {
+			processor.RegisterDatasource(d)
+		}
+	}
+	return nil
 }
 
 func loadRawConfiguration(configBytes []byte, logger logr.Logger) (*configapi.PayloadProcessorConfig, error) {

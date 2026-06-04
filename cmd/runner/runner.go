@@ -39,6 +39,7 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/profiling"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/tracing"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/config/loader"
+	ippdatalayer "github.com/llm-d/llm-d-inference-payload-processor/pkg/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore/inmemory"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
@@ -77,7 +78,7 @@ type Runner struct {
 	profiles map[string]*requesthandling.Profile
 
 	customCollectors []prometheus.Collector
-	processor        *datasource.Processor
+	processor        datasource.DatalayerProcessor
 }
 
 // WithExecutableName sets the name of the executable containing the runner.
@@ -220,7 +221,7 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore, logger logr.Logger) error {
-	r.processor = datasource.NewProcessor()
+	r.processor = ippdatalayer.NewProcessor()
 	handle := plugin.NewHandle(ctx, mgr, ds, r.processor)
 
 	var configBytes []byte

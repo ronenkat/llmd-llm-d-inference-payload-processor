@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package datasource
+package datalayer
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 )
 
@@ -33,11 +34,11 @@ const processorName = "datalayer-processor"
 const defaultBufferSize = 10000
 
 // compile-time interface assertions
-var _ DatalayerProcessor = &Processor{}
-var _ EventNotifier = &Processor{}
+var _ datasource.DatalayerProcessor = &Processor{}
+var _ datasource.EventNotifier = &Processor{}
 
 type collectorEntry struct {
-	collector Collector
+	collector datasource.Collector
 	frequency time.Duration
 }
 
@@ -50,13 +51,13 @@ type Processor struct {
 	name plugin.TypedName
 
 	// event notification
-	ch         chan Event
-	extractors []Extractor
+	ch         chan datasource.Event
+	extractors []datasource.Extractor
 	notifyDone chan struct{}
 
 	// polling
 	collectors  []collectorEntry
-	datasources []DataSource
+	datasources []datasource.DataSource
 	mu          sync.Mutex
 
 	// lifecycle
@@ -71,7 +72,7 @@ type Processor struct {
 func NewProcessor() *Processor {
 	return &Processor{
 		name:       plugin.TypedName{Type: processorName, Name: processorName},
-		ch:         make(chan Event, defaultBufferSize),
+		ch:         make(chan datasource.Event, defaultBufferSize),
 		notifyDone: make(chan struct{}),
 	}
 }
@@ -79,7 +80,7 @@ func NewProcessor() *Processor {
 func (p *Processor) TypedName() plugin.TypedName { return p.name }
 
 // RegisterExtractor adds an Extractor to receive events. Safe to call before Start.
-func (p *Processor) RegisterExtractor(e Extractor) {
+func (p *Processor) RegisterExtractor(e datasource.Extractor) {
 	p.mu.Lock()
 	p.extractors = append(p.extractors, e)
 	p.mu.Unlock()
@@ -88,7 +89,7 @@ func (p *Processor) RegisterExtractor(e Extractor) {
 // RegisterCollector adds a Collector to be polled at the given frequency.
 // Safe to call before or after Start. No-op for the goroutine if called after Stop.
 // Logs an error and skips registration if frequency is not positive.
-func (p *Processor) RegisterCollector(c Collector, frequency time.Duration) {
+func (p *Processor) RegisterCollector(c datasource.Collector, frequency time.Duration) {
 	if frequency <= 0 {
 		log.Log.Error(nil, "processor: skipping collector with non-positive frequency",
 			"collector", c.TypedName(), "frequency", frequency)
@@ -106,7 +107,7 @@ func (p *Processor) RegisterCollector(c Collector, frequency time.Duration) {
 // RegisterDatasource adds a DataSource. If the Processor is already running,
 // the DataSource is started immediately and stopped when the Processor stops.
 // If called before Start, it will be started as part of Start.
-func (p *Processor) RegisterDatasource(d DataSource) {
+func (p *Processor) RegisterDatasource(d datasource.DataSource) {
 	p.mu.Lock()
 	p.datasources = append(p.datasources, d)
 	started := p.started && !p.stopped
@@ -120,7 +121,7 @@ func (p *Processor) RegisterDatasource(d DataSource) {
 }
 
 // Notify fires an event non-blocking; drops silently if the buffer is full.
-func (p *Processor) Notify(e Event) {
+func (p *Processor) Notify(e datasource.Event) {
 	select {
 	case p.ch <- e:
 	default:
@@ -144,7 +145,7 @@ func (p *Processor) Start(ctx context.Context) error {
 	p.started = true
 	snapshot := make([]collectorEntry, len(p.collectors))
 	copy(snapshot, p.collectors)
-	dsSnapshot := make([]DataSource, len(p.datasources))
+	dsSnapshot := make([]datasource.DataSource, len(p.datasources))
 	copy(dsSnapshot, p.datasources)
 	p.mu.Unlock()
 
@@ -199,11 +200,11 @@ func (p *Processor) eventLoop(ctx context.Context, ready chan struct{}) {
 			return
 		case e := <-p.ch:
 			p.mu.Lock()
-			extractors := make([]Extractor, len(p.extractors))
+			extractors := make([]datasource.Extractor, len(p.extractors))
 			copy(extractors, p.extractors)
 			p.mu.Unlock()
 			for _, ext := range extractors {
-				if err := ext.Extract(ctx, []Event{e}); err != nil {
+				if err := ext.Extract(ctx, []datasource.Event{e}); err != nil {
 					logger.Error(err, "extractor error", "extractor", ext.TypedName())
 				}
 			}
@@ -211,7 +212,7 @@ func (p *Processor) eventLoop(ctx context.Context, ready chan struct{}) {
 	}
 }
 
-func (p *Processor) runDatasource(ctx context.Context, d DataSource) {
+func (p *Processor) runDatasource(ctx context.Context, d datasource.DataSource) {
 	defer p.wg.Done()
 	logger := log.FromContext(ctx).WithName("processor").WithValues("datasource", d.TypedName())
 	if err := d.Start(ctx); err != nil {
@@ -222,7 +223,7 @@ func (p *Processor) runDatasource(ctx context.Context, d DataSource) {
 	d.Stop()
 }
 
-func (p *Processor) runCollector(ctx context.Context, c Collector, freq, jitterCap time.Duration) {
+func (p *Processor) runCollector(ctx context.Context, c datasource.Collector, freq, jitterCap time.Duration) {
 	defer p.wg.Done()
 	logger := log.FromContext(ctx).WithName("processor").
 		WithValues("collector", c.TypedName(), "frequency", freq)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,6 +53,8 @@ const (
 	testResponseProcType = "test-response-processor"
 	testScorerType       = "test-scorer"
 	testExtractorType    = "test-extractor"
+	testCollectorType    = "test-collector"
+	testDataSourceType   = "test-datasource"
 )
 
 // TestLoadRawConfiguration verifies that YAML config text is parsed into the expected PayloadProcessorConfig structure.
@@ -326,7 +329,7 @@ func TestBuildProfiles(t *testing.T) {
 	}
 }
 
-// TestBuildDatalayerSources verifies that datalayer plugins are resolved and built from config refs.
+// TestBuildDatalayerSources verifies that datalayer plugins are resolved and registered from config refs.
 func TestBuildDatalayerSources(t *testing.T) {
 	// Not parallel because it modifies global plugin registry.
 	registerTestPlugins(t)
@@ -334,18 +337,15 @@ func TestBuildDatalayerSources(t *testing.T) {
 	tests := []struct {
 		name       string
 		configText string
-		wantLen    int
 		wantErr    bool
 	}{
 		{
 			name:       "Success - no datalayer sources",
 			configText: successConfigText,
-			wantLen:    0,
 		},
 		{
-			name:       "Success - valid datalayer ref",
+			name:       "Success - valid datalayer refs for all categories",
 			configText: datalayerSuccessConfigText,
-			wantLen:    1,
 		},
 		{
 			name:       "Error - missing plugin ref",
@@ -365,14 +365,13 @@ func TestBuildDatalayerSources(t *testing.T) {
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
-			sources, err := buildDatalayerSources(rawConfig.Datalayer, handle, nil)
+			err = buildDatalayerSources(rawConfig.Datalayer, handle, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
-			require.Len(t, sources, tc.wantLen)
 		})
 	}
 }
@@ -443,6 +442,22 @@ var _ datasource.Extractor = &mockExtractor{}
 
 func (m *mockExtractor) Extract(_ context.Context, _ []datasource.Event) error { return nil }
 
+// Mock Collector
+type mockCollector struct{ mockPlugin }
+
+var _ datasource.Collector = &mockCollector{}
+
+func (m *mockCollector) Poll(_ context.Context) (any, error) { return nil, nil }
+func (m *mockCollector) CollectorFrequency() time.Duration   { return 0 }
+
+// Mock DataSource
+type mockDataSource struct{ mockPlugin }
+
+var _ datasource.DataSource = &mockDataSource{}
+
+func (m *mockDataSource) Start(_ context.Context) error { return nil }
+func (m *mockDataSource) Stop()                         {}
+
 // Mock Picker
 type mockPicker struct{ mockPlugin }
 
@@ -503,6 +518,16 @@ func registerTestPlugins(t *testing.T) {
 	plugin.Register(testExtractorType,
 		func(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
 			return &mockExtractor{mockPlugin{t: plugin.TypedName{Name: name, Type: testExtractorType}}}, nil
+		})
+
+	plugin.Register(testCollectorType,
+		func(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockCollector{mockPlugin{t: plugin.TypedName{Name: name, Type: testCollectorType}}}, nil
+		})
+
+	plugin.Register(testDataSourceType,
+		func(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockDataSource{mockPlugin{t: plugin.TypedName{Name: name, Type: testDataSourceType}}}, nil
 		})
 }
 

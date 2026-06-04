@@ -64,9 +64,24 @@ type PayloadProcessorConfig struct {
 	PostProcessing *PluginRefList `json:"postProcessing"`
 
 	// +optional
-	// Datalayer is an optional list of references to Collector and Extractor plugins
+	// Datalayer is an optional configuration for Collector, Extractor, and DataSource plugins
 	// registered with the built-in datalayer Processor.
-	Datalayer []PluginRef `json:"datalayer,omitempty"`
+	Datalayer *DatalayerConfig `json:"datalayer,omitempty"`
+}
+
+// DatalayerConfig holds the plugin references for the three datalayer plugin categories.
+type DatalayerConfig struct {
+	// +optional
+	// Collectors is an optional list of references to Collector plugins.
+	Collectors []PluginRef `json:"collectors,omitempty"`
+
+	// +optional
+	// Extractors is an optional list of references to Extractor plugins.
+	Extractors []PluginRef `json:"extractors,omitempty"`
+
+	// +optional
+	// Datasources is an optional list of references to DataSource plugins.
+	Datasources []PluginRef `json:"datasources,omitempty"`
 }
 
 func (cfg PayloadProcessorConfig) String() string {
@@ -84,7 +99,7 @@ func (cfg PayloadProcessorConfig) String() string {
 	if cfg.PostProcessing != nil {
 		fmt.Fprintf(contents, ", PostProcessing: %v", cfg.PostProcessing)
 	}
-	if len(cfg.Datalayer) > 0 {
+	if cfg.Datalayer != nil {
 		fmt.Fprintf(contents, ", Datalayer: %v", cfg.Datalayer)
 	}
 

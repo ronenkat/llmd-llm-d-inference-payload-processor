@@ -14,26 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package datasource
+package datalayer
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 )
 
 // fakeExtractor is a minimal Extractor for testing.
 type fakeExtractor struct {
 	name   string
-	events []Event
+	events []datasource.Event
 }
 
 func (e *fakeExtractor) TypedName() plugin.TypedName {
 	return plugin.TypedName{Type: "fake-extractor", Name: e.name}
 }
-func (e *fakeExtractor) Extract(_ context.Context, evts []Event) error {
+func (e *fakeExtractor) Extract(_ context.Context, evts []datasource.Event) error {
 	e.events = append(e.events, evts...)
 	return nil
 }
@@ -48,7 +49,7 @@ func TestProcessorNotify(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	proc.Notify(Event{Type: RequestEventType})
+	proc.Notify(datasource.Event{Type: datasource.RequestEventType})
 
 	// Give the event loop time to dispatch.
 	time.Sleep(20 * time.Millisecond)
@@ -71,7 +72,7 @@ func TestProcessorMultipleExtractors(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	proc.Notify(Event{Type: ResponseEventType})
+	proc.Notify(datasource.Event{Type: datasource.ResponseEventType})
 
 	time.Sleep(20 * time.Millisecond)
 	proc.Stop()
