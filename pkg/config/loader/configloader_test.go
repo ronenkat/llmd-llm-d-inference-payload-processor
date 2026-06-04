@@ -208,7 +208,7 @@ func TestInstantiatePlugins(t *testing.T) {
 			}
 
 			// 2. Instantiate
-			handle := plugin.NewHandle(context.Background(), nil, nil)
+			handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 
 			if tc.wantErr {
@@ -301,7 +301,7 @@ func TestBuildProfiles(t *testing.T) {
 			rawConfig, err := loadRawConfiguration([]byte(tc.configText), logger)
 			require.NoError(t, err, "setup: loadRawConfiguration failed")
 
-			handle := plugin.NewHandle(context.Background(), nil, nil)
+			handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
@@ -361,7 +361,7 @@ func TestBuildDatalayerSources(t *testing.T) {
 			rawConfig, err := loadRawConfiguration([]byte(tc.configText), logger)
 			require.NoError(t, err, "setup: loadRawConfiguration failed")
 
-			handle := plugin.NewHandle(context.Background(), nil, nil)
+			handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
@@ -524,7 +524,7 @@ func TestBuildProfilesModelSelectorPlugins(t *testing.T) {
 	registerModelSelectorPlugins(t)
 
 	logger := logging.NewTestLogger()
-	handle := plugin.NewHandle(context.Background(), nil, nil)
+	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 
 	cfg, err := LoadConfiguration([]byte(modelSelectorAllPluginTypesText), handle, nil, logger)
 	require.NoError(t, err, "LoadConfiguration should succeed")
@@ -564,7 +564,7 @@ func TestBuildProfilesScorerMissingWeight(t *testing.T) {
 	registerModelSelectorPlugins(t)
 
 	logger := logging.NewTestLogger()
-	handle := plugin.NewHandle(context.Background(), nil, nil)
+	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 
 	_, err := LoadConfiguration([]byte(modelSelectorScorerMissingWeightText), handle, nil, logger)
 	require.ErrorContains(t, err, "requires a weight")
@@ -576,7 +576,7 @@ func TestBuildProfilesUnknownPluginType(t *testing.T) {
 	registerModelSelectorPlugins(t)
 
 	logger := logging.NewTestLogger()
-	handle := plugin.NewHandle(context.Background(), nil, nil)
+	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
 
 	_, err := LoadConfiguration([]byte(modelSelectorUnknownPluginTypeText), handle, nil, logger)
 	require.ErrorContains(t, err, "is not a RequestProcessor, Filter, Scorer, or Picker")

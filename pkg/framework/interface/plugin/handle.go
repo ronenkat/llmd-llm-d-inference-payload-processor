@@ -112,16 +112,12 @@ func (h *ippHandlePlugins) GetAllPluginsWithNames() map[string]Plugin {
 	return h.plugins
 }
 
-func NewHandle(ctx context.Context, mgr ctrl.Manager, ds datalayer.Datastore, notifier ...datalayer.EventNotifier) Handle {
-	var n datalayer.EventNotifier
-	if len(notifier) > 0 {
-		n = notifier[0]
-	}
+func NewHandle(ctx context.Context, mgr ctrl.Manager, ds datalayer.Datastore, notifier datalayer.EventNotifier) Handle {
 	return &payloadProcessorHandle{
 		ctx:      ctx,
 		mgr:      mgr,
 		ds:       ds,
-		notifier: n,
+		notifier: notifier,
 		HandlePlugins: &ippHandlePlugins{
 			plugins: map[string]Plugin{},
 		},
