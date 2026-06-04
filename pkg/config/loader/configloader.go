@@ -28,7 +28,6 @@ import (
 
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	config "github.com/llm-d/llm-d-inference-payload-processor/pkg/config"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
@@ -74,57 +73,32 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 		return nil, err
 	}
 
-	notificationSources, err := buildNotificationSources(rawConfig.NotificationSources, handle)
+	datalayerSources, err := buildDatalayerSources(rawConfig.Datalayer, handle)
 	if err != nil {
-		logger.Error(err, "failed to load one or more notification sources")
+		logger.Error(err, "failed to load one or more datalayer sources")
 		return nil, err
 	}
 
-	pollingSources, err := buildPollingSources(rawConfig.PollingSources, handle)
-	if err != nil {
-		logger.Error(err, "failed to load one or more polling sources")
-	}
 	if err = buildModelSelector(profiles, handle); err != nil {
 		logger.Error(err, "failed to build model selector profiles")
 		return nil, err
 	}
 
 	return &config.Config{
-		ProfilePicker:       profilePicker,
-		Profiles:            profiles,
-		NotificationSources: notificationSources,
-		PollingSources:      pollingSources,
+		ProfilePicker:    profilePicker,
+		Profiles:         profiles,
+		DatalayerSources: datalayerSources,
 	}, nil
 }
 
-func buildNotificationSources(refs []configapi.PluginRef, handle plugin.Handle) ([]datasource.NotificationSource, error) {
-	sources := make([]datasource.NotificationSource, 0, len(refs))
+func buildDatalayerSources(refs []configapi.PluginRef, handle plugin.Handle) ([]plugin.Plugin, error) {
+	sources := make([]plugin.Plugin, 0, len(refs))
 	for _, ref := range refs {
 		p := handle.Plugin(ref.PluginRef)
 		if p == nil {
 			return nil, fmt.Errorf("there is no plugin named %s", ref.PluginRef)
 		}
-		src, ok := p.(datasource.NotificationSource)
-		if !ok {
-			return nil, fmt.Errorf("the plugin named %s is not a NotificationSource", ref.PluginRef)
-		}
-		sources = append(sources, src)
-	}
-	return sources, nil
-}
-
-func buildPollingSources(refs []configapi.PluginRef, handle plugin.Handle) ([]datasource.PollingSource, error) {
-	sources := make([]datasource.PollingSource, 0, len(refs))
-	for _, ref := range refs {
-		p := handle.Plugin(ref.PluginRef)
-		if p == nil {
-			return nil, fmt.Errorf("there is no plugin named %s", ref.PluginRef)
-		}
-		src, ok := p.(datasource.PollingSource)
-		if !ok {
-			return nil, fmt.Errorf("the plugin named %s is not a PollingSource", ref.PluginRef)
-		}
-		sources = append(sources, src)
+		sources = append(sources, p)
 	}
 	return sources, nil
 }

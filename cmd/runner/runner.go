@@ -44,8 +44,6 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
-	notificationsource "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/notificationsource"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/pollingsource"
 	requestmetadata "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/requestmetadata"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/random"
@@ -78,9 +76,8 @@ type Runner struct {
 	// profiles is the set of named profiles loaded from the configuration
 	profiles map[string]*requesthandling.Profile
 
-	customCollectors    []prometheus.Collector
-	notificationSources []datasource.NotificationSource
-	pollingSources      []datasource.PollingSource
+	customCollectors []prometheus.Collector
+	processor        *datasource.Processor
 }
 
 // WithExecutableName sets the name of the executable containing the runner.
@@ -187,26 +184,11 @@ func (r *Runner) Run(ctx context.Context) error {
 		return err
 	}
 
-	for _, src := range r.notificationSources {
-		if err := src.Start(ctx); err != nil {
-			setupLog.Error(err, "failed to start notification source", "name", src.TypedName().Name)
-			return err
-		}
+	if err := r.processor.Start(ctx); err != nil {
+		setupLog.Error(err, "failed to start datalayer processor")
+		return err
 	}
-	for _, src := range r.pollingSources {
-		if err := src.Start(ctx); err != nil {
-			setupLog.Error(err, "failed to start polling source", "name", src.TypedName().Name)
-			return err
-		}
-	}
-	defer func() {
-		for _, src := range r.notificationSources {
-			src.Stop()
-		}
-		for _, src := range r.pollingSources {
-			src.Stop()
-		}
-	}()
+	defer r.processor.Stop()
 
 	// Setup ExtProc Server Runner.
 	serverRunner := &runserver.ExtProcServerRunner{
@@ -238,7 +220,8 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options, mgr manager.Manager, ds datalayer.Datastore, logger logr.Logger) error {
-	handle := plugin.NewHandle(ctx, mgr, ds)
+	r.processor = datasource.NewProcessor()
+	handle := plugin.NewHandle(ctx, mgr, ds, r.processor)
 
 	var configBytes []byte
 	if opts.ConfigText != "" {
@@ -262,8 +245,15 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 
 	r.profilePicker = theConfig.ProfilePicker
 	r.profiles = theConfig.Profiles
-	r.notificationSources = theConfig.NotificationSources
-	r.pollingSources = theConfig.PollingSources
+
+	for _, p := range theConfig.DatalayerSources {
+		if c, ok := p.(datasource.Collector); ok {
+			r.processor.RegisterCollector(c, c.CollectorFrequency())
+		}
+		if e, ok := p.(datasource.Extractor); ok {
+			r.processor.RegisterExtractor(e)
+		}
+	}
 
 	return nil
 }
@@ -274,8 +264,6 @@ func (r *Runner) registerInTreePlugins() {
 	plugin.Register(bodyfieldtoheader.BodyFieldToHeaderPluginType, bodyfieldtoheader.BodyFieldToHeaderPluginFactory)
 	plugin.Register(basemodelextractor.BaseModelToHeaderPluginType, basemodelextractor.BaseModelToHeaderPluginFactory)
 	plugin.Register(requestmetadata.PluginType, requestmetadata.ExtractorFactory)
-	plugin.Register(notificationsource.PluginType, notificationsource.Factory)
-	plugin.Register(pollingsource.PluginType, pollingsource.Factory)
 	// register model selector plugins
 	plugin.Register(random.RandomPickerType, random.RandomPickerFactory)
 	plugin.Register(maxscore.MaxScorePickerType, maxscore.MaxScorePickerFactory)

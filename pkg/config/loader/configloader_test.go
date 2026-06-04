@@ -31,8 +31,6 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/notificationsource"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/pollingsource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/scorer/costaware"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/requesthandling/basemodelextractor"
@@ -326,10 +324,9 @@ func TestBuildProfiles(t *testing.T) {
 	}
 }
 
-// TestBuildNotificationSources verifies that notification source plugins are resolved and built from config refs.
-func TestBuildNotificationSources(t *testing.T) {
+// TestBuildDatalayerSources verifies that datalayer plugins are resolved and built from config refs.
+func TestBuildDatalayerSources(t *testing.T) {
 	// Not parallel because it modifies global plugin registry.
-	plugin.Register(notificationsource.PluginType, notificationsource.Factory)
 	registerTestPlugins(t)
 
 	tests := []struct {
@@ -339,12 +336,12 @@ func TestBuildNotificationSources(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "Success - no notification sources",
+			name:       "Success - no datalayer sources",
 			configText: successConfigText,
 			wantLen:    0,
 		},
 		{
-			name:       "Success - valid notification source ref",
+			name:       "Success - valid datalayer ref",
 			configText: datalayerSuccessConfigText,
 			wantLen:    1,
 		},
@@ -353,11 +350,6 @@ func TestBuildNotificationSources(t *testing.T) {
 			configText: datalayerMissingRefConfigText,
 			wantErr:    true,
 		},
-		{
-			name:       "Error - plugin is not a NotificationSource",
-			configText: datalayerWrongTypeConfigText,
-			wantErr:    true,
-		},
 	}
 
 	for _, tc := range tests {
@@ -371,64 +363,7 @@ func TestBuildNotificationSources(t *testing.T) {
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
-			sources, err := buildNotificationSources(rawConfig.NotificationSources, handle)
-
-			if tc.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			require.Len(t, sources, tc.wantLen)
-		})
-	}
-}
-
-// TestBuildPollingSources verifies that polling source plugins are resolved and built from config refs.
-func TestBuildPollingSources(t *testing.T) {
-	// Not parallel because it modifies global plugin registry.
-	plugin.Register(pollingsource.PluginType, pollingsource.Factory)
-	registerTestPlugins(t)
-
-	tests := []struct {
-		name       string
-		configText string
-		wantLen    int
-		wantErr    bool
-	}{
-		{
-			name:       "Success - no polling sources",
-			configText: successConfigText,
-			wantLen:    0,
-		},
-		{
-			name:       "Success - valid polling source ref",
-			configText: pollingSourceSuccessConfigText,
-			wantLen:    1,
-		},
-		{
-			name:       "Error - missing plugin ref",
-			configText: pollingSourceMissingRefConfigText,
-			wantErr:    true,
-		},
-		{
-			name:       "Error - plugin is not a PollingSource",
-			configText: pollingSourceWrongTypeConfigText,
-			wantErr:    true,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			logger := logging.NewTestLogger()
-
-			rawConfig, err := loadRawConfiguration([]byte(tc.configText), logger)
-			require.NoError(t, err, "setup: loadRawConfiguration failed")
-
-			handle := plugin.NewHandle(context.Background(), nil, nil)
-			err = instantiatePlugins(rawConfig.Plugins, handle)
-			require.NoError(t, err, "setup: instantiatePlugins failed")
-
-			sources, err := buildPollingSources(rawConfig.PollingSources, handle)
+			sources, err := buildDatalayerSources(rawConfig.Datalayer, handle)
 
 			if tc.wantErr {
 				require.Error(t, err)

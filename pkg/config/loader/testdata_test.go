@@ -105,15 +105,17 @@ profiles:
     - pluginRef: test-response-processor
 `
 
-// datalayerSuccessConfigText has a valid notification-source reference.
+// datalayerSuccessConfigText has a valid datalayer reference.
 const datalayerSuccessConfigText = `
 apiVersion: llm-d.ai/v1alpha1
 kind: PayloadProcessorConfig
 plugins:
-- name: my-notif-source
-  type: notification-source
-notificationSources:
-- pluginRef: my-notif-source
+- name: test1
+  type: test-plugin
+  parameters:
+    threshold: 10
+datalayer:
+- pluginRef: test1
 `
 
 // datalayerMissingRefConfigText references a plugin that does not exist.
@@ -125,21 +127,8 @@ plugins:
   type: test-plugin
   parameters:
     threshold: 10
-notificationSources:
+datalayer:
 - pluginRef: does-not-exist
-`
-
-// datalayerWrongTypeConfigText references a plugin that is not a NotificationSource.
-const datalayerWrongTypeConfigText = `
-apiVersion: llm-d.ai/v1alpha1
-kind: PayloadProcessorConfig
-plugins:
-- name: test1
-  type: test-plugin
-  parameters:
-    threshold: 10
-notificationSources:
-- pluginRef: test1
 `
 
 // --- Invalid Configurations (Syntax/Structure) ---
@@ -269,41 +258,4 @@ profiles:
     request:
     - pluginRef: model-selector
     - pluginRef: bare-plugin
-`
-
-// pollingSourceSuccessConfigText has a valid polling-source reference.
-const pollingSourceSuccessConfigText = `
-apiVersion: llm-d.ai/v1alpha1
-kind: PayloadProcessorConfig
-plugins:
-- name: my-polling-source
-  type: polling-source
-pollingSources:
-- pluginRef: my-polling-source
-`
-
-// pollingSourceMissingRefConfigText references a plugin that does not exist.
-const pollingSourceMissingRefConfigText = `
-apiVersion: llm-d.ai/v1alpha1
-kind: PayloadProcessorConfig
-plugins:
-- name: test1
-  type: test-plugin
-  parameters:
-    threshold: 10
-pollingSources:
-- pluginRef: does-not-exist
-`
-
-// pollingSourceWrongTypeConfigText references a plugin that is not a PollingSource.
-const pollingSourceWrongTypeConfigText = `
-apiVersion: llm-d.ai/v1alpha1
-kind: PayloadProcessorConfig
-plugins:
-- name: test1
-  type: test-plugin
-  parameters:
-    threshold: 10
-pollingSources:
-- pluginRef: test1
 `
