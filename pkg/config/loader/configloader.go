@@ -28,6 +28,7 @@ import (
 
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	config "github.com/llm-d/llm-d-inference-payload-processor/pkg/config"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
@@ -44,7 +45,7 @@ func init() {
 	utilruntime.Must(configapi.Install(scheme))
 }
 
-func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Logger) (*config.Config, error) {
+func LoadConfiguration(configBytes []byte, handle plugin.Handle, processor datasource.DatalayerProcessor, logger logr.Logger) (*config.Config, error) {
 	rawConfig, err := loadRawConfiguration(configBytes, logger)
 	if err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 		return nil, err
 	}
 
-	datalayerSources, err := buildDatalayerSources(rawConfig.Datalayer, handle)
+	datalayerSources, err := buildDatalayerSources(rawConfig.Datalayer, handle, processor)
 	if err != nil {
 		logger.Error(err, "failed to load one or more datalayer sources")
 		return nil, err
@@ -91,7 +92,7 @@ func LoadConfiguration(configBytes []byte, handle plugin.Handle, logger logr.Log
 	}, nil
 }
 
-func buildDatalayerSources(refs []configapi.PluginRef, handle plugin.Handle) ([]plugin.Plugin, error) {
+func buildDatalayerSources(refs []configapi.PluginRef, handle plugin.Handle, processor datasource.DatalayerProcessor) ([]plugin.Plugin, error) {
 	sources := make([]plugin.Plugin, 0, len(refs))
 	for _, ref := range refs {
 		p := handle.Plugin(ref.PluginRef)
@@ -99,6 +100,23 @@ func buildDatalayerSources(refs []configapi.PluginRef, handle plugin.Handle) ([]
 			return nil, fmt.Errorf("there is no plugin named %s", ref.PluginRef)
 		}
 		sources = append(sources, p)
+		_, isCollector := p.(datasource.Collector)
+		_, isExtractor := p.(datasource.Extractor)
+		_, isDataSource := p.(datasource.DataSource)
+		if !isCollector && !isExtractor && !isDataSource {
+			return nil, fmt.Errorf("plugin %q is not a Collector, Extractor, or DataSource", ref.PluginRef)
+		}
+		if processor != nil {
+			if c, ok := p.(datasource.Collector); ok {
+				processor.RegisterCollector(c, c.CollectorFrequency())
+			}
+			if e, ok := p.(datasource.Extractor); ok {
+				processor.RegisterExtractor(e)
+			}
+			if d, ok := p.(datasource.DataSource); ok {
+				processor.RegisterDatasource(d)
+			}
+		}
 	}
 	return sources, nil
 }

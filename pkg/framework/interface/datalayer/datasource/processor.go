@@ -55,8 +55,9 @@ type Processor struct {
 	notifyDone chan struct{}
 
 	// polling
-	collectors []collectorEntry
-	mu         sync.Mutex
+	collectors  []collectorEntry
+	datasources []DataSource
+	mu          sync.Mutex
 
 	// lifecycle
 	started bool
@@ -102,6 +103,22 @@ func (p *Processor) RegisterCollector(c Collector, frequency time.Duration) {
 	p.mu.Unlock()
 }
 
+// RegisterDatasource adds a DataSource. If the Processor is already running,
+// the DataSource is started immediately and stopped when the Processor stops.
+// If called before Start, it will be started as part of Start.
+func (p *Processor) RegisterDatasource(d DataSource) {
+	p.mu.Lock()
+	p.datasources = append(p.datasources, d)
+	started := p.started && !p.stopped
+	ctx := p.ctx
+	p.mu.Unlock()
+
+	if started {
+		p.wg.Add(1)
+		go p.runDatasource(ctx, d)
+	}
+}
+
 // Notify fires an event non-blocking; drops silently if the buffer is full.
 func (p *Processor) Notify(e Event) {
 	select {
@@ -127,6 +144,8 @@ func (p *Processor) Start(ctx context.Context) error {
 	p.started = true
 	snapshot := make([]collectorEntry, len(p.collectors))
 	copy(snapshot, p.collectors)
+	dsSnapshot := make([]DataSource, len(p.datasources))
+	copy(dsSnapshot, p.datasources)
 	p.mu.Unlock()
 
 	// Start event loop goroutine.
@@ -145,6 +164,11 @@ func (p *Processor) Start(ctx context.Context) error {
 		}
 		p.wg.Add(1)
 		go p.runCollector(ctx, entry.collector, entry.frequency, jitterCap)
+	}
+
+	for _, d := range dsSnapshot {
+		p.wg.Add(1)
+		go p.runDatasource(ctx, d)
 	}
 	return nil
 }
@@ -185,6 +209,17 @@ func (p *Processor) eventLoop(ctx context.Context, ready chan struct{}) {
 			}
 		}
 	}
+}
+
+func (p *Processor) runDatasource(ctx context.Context, d DataSource) {
+	defer p.wg.Done()
+	logger := log.FromContext(ctx).WithName("processor").WithValues("datasource", d.TypedName())
+	if err := d.Start(ctx); err != nil {
+		logger.Error(err, "datasource start failed")
+		return
+	}
+	<-ctx.Done()
+	d.Stop()
 }
 
 func (p *Processor) runCollector(ctx context.Context, c Collector, freq, jitterCap time.Duration) {

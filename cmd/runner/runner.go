@@ -238,22 +238,13 @@ func (r *Runner) loadConfiguration(ctx context.Context, opts *runserver.Options,
 	// Register factories for all known in-tree plugins
 	r.registerInTreePlugins()
 
-	theConfig, err := loader.LoadConfiguration(configBytes, handle, logger)
+	theConfig, err := loader.LoadConfiguration(configBytes, handle, r.processor, logger)
 	if err != nil {
 		return err
 	}
 
 	r.profilePicker = theConfig.ProfilePicker
 	r.profiles = theConfig.Profiles
-
-	for _, p := range theConfig.DatalayerSources {
-		if c, ok := p.(datasource.Collector); ok {
-			r.processor.RegisterCollector(c, c.CollectorFrequency())
-		}
-		if e, ok := p.(datasource.Extractor); ok {
-			r.processor.RegisterExtractor(e)
-		}
-	}
 
 	return nil
 }

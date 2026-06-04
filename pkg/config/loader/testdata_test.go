@@ -111,9 +111,7 @@ apiVersion: llm-d.ai/v1alpha1
 kind: PayloadProcessorConfig
 plugins:
 - name: test1
-  type: test-plugin
-  parameters:
-    threshold: 10
+  type: test-extractor
 datalayer:
 - pluginRef: test1
 `

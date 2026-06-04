@@ -60,6 +60,7 @@ type ResponsePayload struct {
 type DatalayerProcessor interface {
 	RegisterExtractor(e Extractor)
 	RegisterCollector(c Collector, frequency time.Duration)
+	RegisterDatasource(d DataSource)
 }
 
 // Extractor processes a batch of Events. It does not manage its own goroutines.

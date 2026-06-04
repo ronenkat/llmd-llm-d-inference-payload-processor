@@ -28,6 +28,7 @@ import (
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
@@ -50,6 +51,7 @@ const (
 	testRequestProcType  = "test-request-processor"
 	testResponseProcType = "test-response-processor"
 	testScorerType       = "test-scorer"
+	testExtractorType    = "test-extractor"
 )
 
 // TestLoadRawConfiguration verifies that YAML config text is parsed into the expected PayloadProcessorConfig structure.
@@ -363,7 +365,7 @@ func TestBuildDatalayerSources(t *testing.T) {
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
-			sources, err := buildDatalayerSources(rawConfig.Datalayer, handle)
+			sources, err := buildDatalayerSources(rawConfig.Datalayer, handle, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -434,6 +436,13 @@ func (m *mockScorer) Score(ctx context.Context, cycleState *plugin.CycleState, r
 	return nil
 }
 
+// Mock Extractor
+type mockExtractor struct{ mockPlugin }
+
+var _ datasource.Extractor = &mockExtractor{}
+
+func (m *mockExtractor) Extract(_ context.Context, _ []datasource.Event) error { return nil }
+
 // Mock Picker
 type mockPicker struct{ mockPlugin }
 
@@ -490,6 +499,11 @@ func registerTestPlugins(t *testing.T) {
 		func(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
 			return &mockFilter{mockPlugin{t: plugin.TypedName{Name: name, Type: testFilterType}}}, nil
 		})
+
+	plugin.Register(testExtractorType,
+		func(name string, _ json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockExtractor{mockPlugin{t: plugin.TypedName{Name: name, Type: testExtractorType}}}, nil
+		})
 }
 
 // registerModelSelectorPlugins registers the real model-selector plugin factories used by
@@ -512,7 +526,7 @@ func TestBuildProfilesModelSelectorPlugins(t *testing.T) {
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil)
 
-	cfg, err := LoadConfiguration([]byte(modelSelectorAllPluginTypesText), handle, logger)
+	cfg, err := LoadConfiguration([]byte(modelSelectorAllPluginTypesText), handle, nil, logger)
 	require.NoError(t, err, "LoadConfiguration should succeed")
 
 	profile, ok := cfg.Profiles["default"]
@@ -552,7 +566,7 @@ func TestBuildProfilesScorerMissingWeight(t *testing.T) {
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil)
 
-	_, err := LoadConfiguration([]byte(modelSelectorScorerMissingWeightText), handle, logger)
+	_, err := LoadConfiguration([]byte(modelSelectorScorerMissingWeightText), handle, nil, logger)
 	require.ErrorContains(t, err, "requires a weight")
 }
 
@@ -564,6 +578,6 @@ func TestBuildProfilesUnknownPluginType(t *testing.T) {
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil)
 
-	_, err := LoadConfiguration([]byte(modelSelectorUnknownPluginTypeText), handle, logger)
+	_, err := LoadConfiguration([]byte(modelSelectorUnknownPluginTypeText), handle, nil, logger)
 	require.ErrorContains(t, err, "is not a RequestProcessor, Filter, Scorer, or Picker")
 }
