@@ -49,6 +49,8 @@ const (
 	testFilterType       = "test-filter"
 	testPickerType       = "test-picker"
 	testPluginType       = "test-plugin"
+	testPostProcessor    = "test-post-processor"
+	testPreProcessor     = "test-pre-processor"
 	testProfilePicker    = "test-profile-picker"
 	testRequestProcType  = "test-request-processor"
 	testResponseProcType = "test-response-processor"
@@ -317,7 +319,7 @@ func TestBuildProfiles(t *testing.T) {
 			profiles, errProf := buildProfiles(rawConfig.Profiles, handle)
 			if tc.wantErr {
 				if err == nil && errProf == nil {
-					t.Logf("either applyPluginDefaults or buildProfiles was suppose to fail")
+					t.Errorf("either applyPluginDefaults or buildProfiles was suppose to fail")
 				}
 				return
 			}
@@ -325,6 +327,88 @@ func TestBuildProfiles(t *testing.T) {
 			require.NoError(t, errProf, "buildProfiles failed")
 			if tc.validate != nil {
 				tc.validate(t, rawConfig, profiles, handle)
+			}
+		})
+	}
+}
+
+func TestBuildPreAndPostProcessors(t *testing.T) {
+	// Not parallel because it modifies global plugin registry.
+	registerTestPlugins(t)
+
+	tests := []struct {
+		name       string
+		configText string
+		preLen     int
+		postLen    int
+		wantErr    bool
+	}{
+		{
+			name:       "successConfigPreAndPostProcessors",
+			configText: successConfigPreAndPostProcessorsText,
+			preLen:     2,
+			postLen:    1,
+		},
+		{
+			name:       "successConfigPreProcessorsOnly",
+			configText: successConfigPreProcessorsOnlyText,
+			preLen:     2,
+			postLen:    0,
+		},
+		{
+			name:       "successConfigPostProcessorsOnly",
+			configText: successConfigPostProcessorsOnlyText,
+			preLen:     0,
+			postLen:    1,
+		},
+		{
+			name:       "errorBadPreProcessors",
+			configText: errorBadPreProcessorsText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorBadPostProcessors",
+			configText: errorBadPostProcessorsText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorMissingPreProcessors",
+			configText: errorMissingPreProcessorsText,
+			wantErr:    true,
+		},
+		{
+			name:       "errorMissingPostProcessors",
+			configText: errorMissingPostProcessorsText,
+			wantErr:    true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := logging.NewTestLogger()
+
+			rawConfig, err := loadRawConfiguration([]byte(tc.configText), logger)
+			require.NoError(t, err, "setup: loadRawConfiguration failed")
+
+			handle := plugin.NewHandle(context.Background(), nil, nil, nil)
+			err = instantiatePlugins(rawConfig.Plugins, handle)
+			require.NoError(t, err, "setup: instantiatePlugins failed")
+
+			preProcessors, preErr := buildPreProcessors(rawConfig.PreProcessing, handle)
+			postProcessors, postErr := buildPostProcessors(rawConfig.PostProcessing, handle)
+
+			if tc.wantErr {
+				if preErr == nil && postErr == nil {
+					t.Errorf("either buildPreProcessors or buildPostProcessors was suppose to fail")
+				}
+				t.Log("preErr=", preErr)
+				t.Log("postErr=", postErr)
+			} else {
+				require.NoError(t, preErr, "buildPreProcessors wasn't suppose to fail")
+				require.NoError(t, postErr, "buildPostProcessors wasn't suppose to fail")
+
+				require.Equal(t, tc.preLen, len(preProcessors), "buildPreProcessors didn't return the correct number of pre-processors")
+				require.Equal(t, tc.postLen, len(postProcessors), "buildPostProcessors didn't return the correct number of post-processors")
 			}
 		})
 	}
@@ -387,10 +471,30 @@ type mockPlugin struct {
 
 func (m *mockPlugin) TypedName() plugin.TypedName { return m.t }
 
+// Mock PreProcessor
+type mockPreProcessor struct{ mockPlugin }
+
+// compile time assertion
+var _ requesthandling.PreProcessor = &mockPreProcessor{}
+
+func (m *mockPreProcessor) PreProcess(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceRequest) error {
+	return nil
+}
+
+// Mock PostProcessor
+type mockPostProcessor struct{ mockPlugin }
+
+// compile time assertion
+var _ requesthandling.PostProcessor = &mockPostProcessor{}
+
+func (m *mockPostProcessor) PostProcess(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceResponse) error {
+	return nil
+}
+
 // Mock ProfilePicker
 type mockProfilePicker struct{ mockPlugin }
 
-// compiel-time type assertion
+// compile-time type assertion
 var _ requesthandling.ProfilePicker = &mockProfilePicker{}
 
 func (m *mockProfilePicker) Pick(ctx context.Context, cycleState *plugin.CycleState, request *requesthandling.InferenceRequest,
@@ -478,6 +582,16 @@ func registerTestPlugins(t *testing.T) {
 	plugin.Register(testPluginType,
 		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
 			return &mockPlugin{t: plugin.TypedName{Name: name, Type: testPluginType}}, nil
+		})
+
+	plugin.Register(testPreProcessor,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockPreProcessor{mockPlugin{t: plugin.TypedName{Name: name, Type: testPreProcessor}}}, nil
+		})
+
+	plugin.Register(testPostProcessor,
+		func(name string, params json.RawMessage, _ plugin.Handle) (plugin.Plugin, error) {
+			return &mockPostProcessor{mockPlugin{t: plugin.TypedName{Name: name, Type: testPostProcessor}}}, nil
 		})
 
 	plugin.Register(testProfilePicker,

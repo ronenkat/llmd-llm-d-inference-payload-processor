@@ -105,6 +105,56 @@ profiles:
     - pluginRef: test-response-processor
 `
 
+// successConfigPreAndPostProcessorsText represents both pre-processors and post-processors.
+const successConfigPreAndPostProcessorsText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-pre-processor
+- name: pre-processor-2
+  type: test-pre-processor
+- type: test-post-processor
+preProcessing:
+  plugins:
+  - pluginRef: pre-processor-2
+  - pluginRef: test-pre-processor
+postProcessing:
+  plugins:
+  - pluginRef: test-post-processor
+`
+
+// successConfigPreProcessorsOnlyText represents only pre-processors.
+const successConfigPreProcessorsOnlyText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-pre-processor
+- name: pre-processor-2
+  type: test-pre-processor
+- type: test-post-processor
+preProcessing:
+  plugins:
+  - pluginRef: pre-processor-2
+  - pluginRef: test-pre-processor
+postProcessing:
+  plugins:
+`
+
+// successConfigPreAndPostProcessorsText represents only post-processors.
+const successConfigPostProcessorsOnlyText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-pre-processor
+- name: pre-processor-2
+  type: test-pre-processor
+- type: test-post-processor
+preProcessing:
+postProcessing:
+  plugins:
+  - pluginRef: test-post-processor
+`
+
 // datalayerSuccessConfigText has valid datalayer references across all three categories.
 const datalayerSuccessConfigText = `
 apiVersion: llm-d.ai/v1alpha1
@@ -137,6 +187,27 @@ plugins:
 datalayer:
   extractors:
   - pluginRef: does-not-exist
+`
+
+// modelSelectorAllPluginTypesText wires a Filter, a weighted Scorer, and a Picker
+// alongside a model-selector RequestProcessor plugin in the same profile.
+const modelSelectorAllPluginTypesText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: model-selector
+- type: test-filter
+- type: cost-scorer
+- type: max-score-picker
+profiles:
+- name: default
+  plugins:
+    request:
+    - pluginRef: model-selector
+    - pluginRef: test-filter
+    - pluginRef: cost-scorer
+      weight: 2.5
+    - pluginRef: max-score-picker
 `
 
 // --- Invalid Configurations (Syntax/Structure) ---
@@ -201,8 +272,6 @@ kind: PayloadProcessorConfig
 plugins:
 - type: test-request-processor
 - type: test-response-processor
-profilePicker:
-  pluginRef: test-profile-picker
 profiles:
 - name: one
   plugins:
@@ -212,27 +281,6 @@ profiles:
   plugins:
     response:
     - pluginRef: test-response-processor
-`
-
-// modelSelectorAllPluginTypesText wires a Filter, a weighted Scorer, and a Picker
-// alongside a model-selector RequestProcessor plugin in the same profile.
-const modelSelectorAllPluginTypesText = `
-apiVersion: llm-d.ai/v1alpha1
-kind: PayloadProcessorConfig
-plugins:
-- type: model-selector
-- type: test-filter
-- type: cost-scorer
-- type: max-score-picker
-profiles:
-- name: default
-  plugins:
-    request:
-    - pluginRef: model-selector
-    - pluginRef: test-filter
-    - pluginRef: cost-scorer
-      weight: 2.5
-    - pluginRef: max-score-picker
 `
 
 // modelSelectorScorerMissingWeightText is an error case: scorer without a weight.
@@ -266,4 +314,48 @@ profiles:
     request:
     - pluginRef: model-selector
     - pluginRef: bare-plugin
+`
+
+// errorBadPreProcessorsText represents a reference to a plugin that is not a pre-processor
+const errorBadPreProcessorsText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-request-processor
+preProcessing:
+  plugins:
+  - pluginRef: test-request-processor
+`
+
+// errorBadPostProcessorsText represents a reference to a plugin that is not a post-processor
+const errorBadPostProcessorsText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-response-processor
+postProcessing:
+  plugins:
+  - pluginRef: test-response-processor
+`
+
+// errorMissingPreProcessorsText represents a reference to an unknown pre-processor
+const errorMissingPreProcessorsText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-request-processor
+preProcessing:
+  plugins:
+  - pluginRef: test-pre-processor
+`
+
+// errorMissingPostProcessorsText represents a reference to an unknown post-processor
+const errorMissingPostProcessorsText = `
+apiVersion: llm-d.ai/v1alpha1
+kind: PayloadProcessorConfig
+plugins:
+- type: test-response-processor
+postProcessing:
+  plugins:
+  - pluginRef: test-post-processor
 `
