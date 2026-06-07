@@ -103,9 +103,7 @@ func buildDatalayerSources(cfg *configapi.DatalayerConfig, handle plugin.Handle,
 		if !ok {
 			return fmt.Errorf("plugin %q is not a Collector", ref.PluginRef)
 		}
-		if processor != nil {
-			processor.RegisterCollector(c, c.CollectorFrequency())
-		}
+		processor.RegisterCollector(c, c.CollectorFrequency())
 	}
 	for _, ref := range cfg.Extractors {
 		p := handle.Plugin(ref.PluginRef)
@@ -116,9 +114,7 @@ func buildDatalayerSources(cfg *configapi.DatalayerConfig, handle plugin.Handle,
 		if !ok {
 			return fmt.Errorf("plugin %q is not an Extractor", ref.PluginRef)
 		}
-		if processor != nil {
-			processor.RegisterExtractor(e)
-		}
+		processor.RegisterExtractor(e)
 	}
 	for _, ref := range cfg.Datasources {
 		p := handle.Plugin(ref.PluginRef)
@@ -129,9 +125,7 @@ func buildDatalayerSources(cfg *configapi.DatalayerConfig, handle plugin.Handle,
 		if !ok {
 			return fmt.Errorf("plugin %q is not a DataSource", ref.PluginRef)
 		}
-		if processor != nil {
-			processor.RegisterDatasource(d)
-		}
+		processor.RegisterDatasource(d)
 	}
 	return nil
 }

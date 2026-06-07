@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	configapi "github.com/llm-d/llm-d-inference-payload-processor/apix/config/v1alpha1"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/common/observability/logging"
+	datalayerpkg "github.com/llm-d/llm-d-inference-payload-processor/pkg/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/datasource"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/modelselector"
@@ -357,6 +358,8 @@ func TestBuildDatalayerSources(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := logging.NewTestLogger()
+			// Initialize fake processor for testing
+			processor := datalayerpkg.NewFakeProcessor()
 
 			rawConfig, err := loadRawConfiguration([]byte(tc.configText), logger)
 			require.NoError(t, err, "setup: loadRawConfiguration failed")
@@ -365,7 +368,7 @@ func TestBuildDatalayerSources(t *testing.T) {
 			err = instantiatePlugins(rawConfig.Plugins, handle)
 			require.NoError(t, err, "setup: instantiatePlugins failed")
 
-			err = buildDatalayerSources(rawConfig.Datalayer, handle, nil)
+			err = buildDatalayerSources(rawConfig.Datalayer, handle, processor)
 
 			if tc.wantErr {
 				require.Error(t, err)
