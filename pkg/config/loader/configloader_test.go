@@ -553,8 +553,9 @@ func TestBuildProfilesModelSelectorPlugins(t *testing.T) {
 
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
+	processor := datalayerpkg.NewFakeProcessor()
 
-	cfg, err := LoadConfiguration([]byte(modelSelectorAllPluginTypesText), handle, nil, logger)
+	cfg, err := LoadConfiguration([]byte(modelSelectorAllPluginTypesText), handle, processor, logger)
 	require.NoError(t, err, "LoadConfiguration should succeed")
 
 	profile, ok := cfg.Profiles["default"]
@@ -593,8 +594,9 @@ func TestBuildProfilesScorerMissingWeight(t *testing.T) {
 
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
+	processor := datalayerpkg.NewFakeProcessor()
 
-	_, err := LoadConfiguration([]byte(modelSelectorScorerMissingWeightText), handle, nil, logger)
+	_, err := LoadConfiguration([]byte(modelSelectorScorerMissingWeightText), handle, processor, logger)
 	require.ErrorContains(t, err, "requires a weight")
 }
 
@@ -605,7 +607,8 @@ func TestBuildProfilesUnknownPluginType(t *testing.T) {
 
 	logger := logging.NewTestLogger()
 	handle := plugin.NewHandle(context.Background(), nil, nil, nil)
+	processor := datalayerpkg.NewFakeProcessor()
 
-	_, err := LoadConfiguration([]byte(modelSelectorUnknownPluginTypeText), handle, nil, logger)
+	_, err := LoadConfiguration([]byte(modelSelectorUnknownPluginTypeText), handle, processor, logger)
 	require.ErrorContains(t, err, "is not a RequestProcessor, Filter, Scorer, or Picker")
 }
