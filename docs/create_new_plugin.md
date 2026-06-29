@@ -69,11 +69,11 @@ same signature shape but differ in when they are called:
 ProcessRequest(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest) error
 ```
 ```go
-// Before profile selection (reserved, not yet invoked)
+// Before profile selection
 PreProcess(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest) error
 ```
 ```go
-// After response plugins (reserved, not yet invoked)
+// After response plugins
 PostProcess(ctx context.Context, cycleState *plugin.CycleState, response *InferenceResponse) error
 ```
 
