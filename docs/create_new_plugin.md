@@ -117,10 +117,11 @@ Extract(ctx context.Context, events []datasource.Event) error
 // Collector — periodical pool at defined collection frequency
 Poll(ctx context.Context) (any, error)
 CollectorFrequency() time.Duration
+```
 ```go
 // DataSource — started once
 Start(ctx context.Context) error
-Stop()                                                                        
+Stop()
 ```
 
 `Extractor.Extract` receives every event type and must filter internally to the types it cares about.
