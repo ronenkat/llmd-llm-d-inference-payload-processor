@@ -111,7 +111,7 @@ per-reference `weight`. `Pick` selects exactly one model from the scored candida
 
 ```go
 // Extractor — event-driven
-Extract(ctx context.Context, events []datasource.Event) error                
+Extract(ctx context.Context, events []datasource.Event) error
 ```
 ```go
 // Collector — periodical pool at defined collection frequency
