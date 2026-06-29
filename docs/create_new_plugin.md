@@ -29,8 +29,9 @@ type Plugin interface {
 per-instance name from configuration. Because instances are named, one plugin type can be instantiated
 multiple times with different parameters.
 
-A plugin then **additionally implements** one extension-point interface; the loader inspects which it
-satisfies and routes it to the matching pipeline stage:
+A plugin then **additionally implements** one or more extension-point interfaces; the loader inspects
+which it satisfies and routes it to the matching pipeline stage or data-layer role. The interfaces are
+defined in three packages:
 
 | Interface | Package | Role |
 |-----------|---------|------|
@@ -43,6 +44,103 @@ satisfies and routes it to the matching pipeline stage:
 
 This tutorial implements `RequestProcessor`; see [Other extension points](#other-extension-points)
 for the rest.
+
+## Implementing the plugin entry points
+
+The sections below list the exact method signatures grouped by interface.
+
+### Request-handling interfaces ([`requesthandling`][requesthandling-src])
+
+**`ProfilePicker`** — called once per request to select the profile to run:
+
+```go
+Pick(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest,
+    profiles map[string]*Profile) (*Profile, error)
+```
+
+Inspect the request and/or the datastore via `Handle.Datastore()` and return the profile to execute.
+Return an error to reject the request.
+
+**Request/pre/post processor methods** — `ProcessRequest`, `PreProcess`, and `PostProcess` share the
+same signature shape but differ in when they are called:
+
+```go
+// Profile specific request stage
+ProcessRequest(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest) error
+```
+```go
+// Before profile selection (reserved, not yet invoked)
+PreProcess(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest) error
+```
+```go
+// After response plugins (reserved, not yet invoked)
+PostProcess(ctx context.Context, cycleState *plugin.CycleState, response *InferenceResponse) error
+```
+
+`ProcessRequest` is the primary hook for inspecting and modifying the request body and headers before
+forwarding. `PreProcess` is intended for mutations that must run regardless of which profile is
+selected. `PostProcess` is the symmetric hook for post-response mutations that must always run.
+Returning a non-nil error from any of these methods short-circuits the pipeline for that request.
+
+**`ResponseProcessor`** — called during the profile's response stage:
+
+```go
+ProcessResponse(ctx context.Context, cycleState *plugin.CycleState, response *InferenceResponse) error
+```
+
+Mutates the response in place via the same `InferenceMessage` helpers as `RequestProcessor`. Runs
+after the model server replies.
+
+### Model-selector interfaces ([`modelselector`][modelselector-src])
+
+```go
+Filter(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest,
+    models []datalayer.Model) []datalayer.Model
+```
+```go
+Score(ctx context.Context, cycleState *plugin.CycleState, request *InferenceRequest,
+    models []datalayer.Model) map[datalayer.Model]float64
+```
+```go
+Pick(ctx context.Context, cycleState *plugin.CycleState,
+    scoredModels []*ScoredModel) *PipelineRunResult
+```
+
+`Filter` returns the subset of candidates that can serve the request; an empty result is an error.
+`Score` returns a score per candidate in `[0, 1]` (values are clamped); multiple scorers combine via
+per-reference `weight`. `Pick` selects exactly one model from the scored candidates.
+
+### Data-layer interfaces ([`datalayer/datasource`][datalayer-src])
+
+```go
+// Extractor — event-driven
+Extract(ctx context.Context, events []datasource.Event) error                
+```
+```go
+// Collector — periodical pool at defined collection frequency
+Poll(ctx context.Context) (any, error)                                        
+CollectorFrequency() time.Duration                                          
+```
+```go
+// DataSource — started once
+Start(ctx context.Context) error                                              
+Stop()                                                                        
+```
+
+`Extractor.Extract` receives every event type and must filter internally to the types it cares about.
+`Collector.Poll` is called on a timer at the frequency returned by `CollectorFrequency`. `DataSource`
+manages its own watch or control loop: `Start` blocks until the context is cancelled, and `Stop`
+unblocks it and releases resources.
+
+### Implementing a multi-plugin feature
+
+When implementing a multi plug-in feature, the loader creates the
+instance **once** from the factory and wires the same object at every matching location in the
+pipeline or data layer — there is no second construction. A plugin that implements both
+`RequestProcessor` and `Extractor`, for example, is registered once under `plugins`, referenced from
+the profile's `request` list, and also from `datalayer.extractors`; the loader recognises both roles
+and routes accordingly. Because it is one object, state accumulated in `ProcessRequest` is directly
+accessible in `Extract` without any external coordination.
 
 ## Code walkthrough
 
