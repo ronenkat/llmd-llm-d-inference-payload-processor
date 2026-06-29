@@ -172,8 +172,9 @@ counts become available to scoring decisions without adding latency to the reque
 
 Events are designed to offload data layer processing asynchronously, away from the time-critical
 request/response pipeline. The pipeline processor fires events at two points in the request lifecycle:
-a `RequestEvent` after the request plugin stage completes, and a `ResponseEvent` after the response body
-is processed. Beyond these, any plugin can fire additional events at any time by calling
+a `RequestEvent` after the request plugin stage completes, and a `ResponseEvent` at the start of
+response body handling — before the response plugins run. Beyond these, any plugin can fire additional
+events at any time by calling
 `Handle.EventNotifier().Notify()` — the [`EventNotifier`] interface exposed to every plugin through its
 IPP handle.
 
