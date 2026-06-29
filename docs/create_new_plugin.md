@@ -42,9 +42,6 @@ defined in three packages:
 | `Filter` / `Scorer` / `Picker` | [`modelselector`][modelselector-src] | The `Filter → Score → Pick` phases that select a *model*. |
 | `Collector` / `Extractor` / `DataSource` | [`datalayer/datasource`][datalayer-src] | Maintain cross-request state consumed by Filters and Scorers. |
 
-This tutorial implements `RequestProcessor`; see [Other extension points](#other-extension-points)
-for the rest.
-
 ## Implementing the plugin entry points
 
 The sections below list the exact method signatures grouped by interface.
@@ -118,12 +115,11 @@ Extract(ctx context.Context, events []datasource.Event) error
 ```
 ```go
 // Collector — periodical pool at defined collection frequency
-Poll(ctx context.Context) (any, error)                                        
-CollectorFrequency() time.Duration                                          
-```
+Poll(ctx context.Context) (any, error)
+CollectorFrequency() time.Duration
 ```go
 // DataSource — started once
-Start(ctx context.Context) error                                              
+Start(ctx context.Context) error
 Stop()                                                                        
 ```
 
@@ -141,6 +137,9 @@ pipeline or data layer — there is no second construction. A plugin that implem
 the profile's `request` list, and also from `datalayer.extractors`; the loader recognises both roles
 and routes accordingly. Because it is one object, state accumulated in `ProcessRequest` is directly
 accessible in `Extract` without any external coordination.
+
+The rest of this tutorial implements `RequestProcessor`.
+
 
 ## Code walkthrough
 
