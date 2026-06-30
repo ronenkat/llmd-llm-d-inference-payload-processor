@@ -159,7 +159,7 @@ The **data layer** maintains cross-request state that other plugins (e.g., Score
 consume to make data-driven decisions.
 It is populated through two mechanisms that run independently from the request processing pipeline:
 
-- **Event-driven updates** — Events generated during request/response processing are consumed
+- **Event-driven notifications** — Events generated during request/response processing are consumed
   asynchronously by **Extractors** that update the datastore.
 - **Collection mechanism** — **Collectors** and **Datasources** pull configuration and signals from
   external resources, either on a timer or through a watch.
@@ -168,10 +168,16 @@ Data-layer plugins are registered under the `datalayer` section of the config an
 a profile's `request` or `response` plugin lists. This is how runtime signals such as in-flight request
 counts become available to scoring decisions without adding latency to the request path.
 
-### Event-Driven Updates
+### Event-Driven Notifications
+
 
 Events are designed to offload data layer processing asynchronously, away from the time-critical
-request/response pipeline. The pipeline processor fires events at two points in the request lifecycle:
+request/response pipeline.
+<p align="center">
+  <img src="images/ipp-datalayer-events.svg" width="820" alt="IPP Event-Driven Notifications">
+</p>
+
+The response/request pipeline processor fires events at two points in the request lifecycle:
 a `RequestEvent` after the request plugin stage completes, and a `ResponseEvent` at the start of
 response body handling — before the response plugins run. Beyond these, any plugin can fire additional
 events at any time by calling
