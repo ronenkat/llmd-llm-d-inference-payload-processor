@@ -35,7 +35,7 @@ defined in three packages:
 
 | Interface | Package | Role |
 |-----------|---------|------|
-| `PreProcessor` / `PostProcessor` | [`requesthandling`][requesthandling-src] | Reserved global stages (before profile selection / after the response plugins). Defined in the API but not yet invoked by the request path. |
+| `PreProcessor` / `PostProcessor` | [`requesthandling`][requesthandling-src] | Reserved global stages (before profile selection / after the response plugins). |
 | `RequestProcessor` | [`requesthandling`][requesthandling-src] | Inspect and mutate the request before routing. |
 | `ResponseProcessor` | [`requesthandling`][requesthandling-src] | Inspect and mutate the response on its way back. |
 | `ProfilePicker` | [`requesthandling`][requesthandling-src] | Choose which profile runs for a request. |
@@ -168,24 +168,18 @@ With a single profile and no `profilePicker`, [`single-profile-picker`] is enabl
 [Configuration][Configuration] for the full schema (pre/post processing, the `datalayer` section,
 scorer `weight`, proxy integration).
 
-## Other extension points
+## Additional extension points
 
-A model-selector plugin has the same shape but implements one of the
+Generally, plugins have the same shape but implements different interfaces. E.g., one of the
 [`modelselector`][modelselector-src] interfaces (`Filter`, `Scorer`, or `Picker`) instead of
 `RequestProcessor`. For example, a `Scorer` implements `Score(...) map[datalayer.Model]float64`,
-returning a score per candidate. The [`cost-scorer`][costaware-src] is a concrete reference; its
-factory and `WithName` follow this tutorial (it ships in-tree but, like `model-config-datasource`, is
-not registered in the default runner — add its factory to `registerInTreePlugins` to use it). In
-configuration, a Scorer is referenced from a profile's `request` list alongside the `model-selector`
-entry and **requires** a `weight`. See [Plugins][Plugins] for the full Filter/Scorer/Picker set.
-
-## Implementing the plugin entry points
-
-The sections below list the exact method signatures grouped by interface.
+returning a score per candidate.
+Following is the available interfaces that can be implemented.
 
 ### Request-handling interfaces
 
-In addition to `ProcessRequest`, there are additional request processing extension points.
+In addition to `ProcessRequest`, there are additional request processing interfaces to extend the 
+request and response pipeline processing.
 
 **`ProfilePicker`** — called once per request to select the profile to run. The implementation below
 is the built-in [`single-profile-picker`][single-profile-picker-src], which asserts exactly one
@@ -231,6 +225,24 @@ func (p *MyPreProcessor) PreProcess(
     return nil
 }
 ```
+**`ResponseProcessor`** — called during the profile's response stage before sending the response to the user:
+
+The plugin can mutates the response in place via the same `InferenceMessage` helpers as `RequestProcessor`. Runs
+after the model server replies. Following is an example of adding a header to the response from the request cycle state.
+
+```go
+func (p *ModelNameToHeaderPlugin) ProcessResponse(ctx context.Context, cycleState *plugin.CycleState, response *requesthandling.InferenceResponse) error {
+	selectedModel, err := plugin.ReadCycleStateKey[string](cycleState, modelselector.SelectedModelCycleStateKey)
+	if err != nil {
+		log.FromContext(ctx).V(logutil.VERBOSE).Info("no selected model in CycleState, skipping")
+		return nil
+	}
+	response.SetHeader(bodyfieldtoheader.ModelHeader, selectedModel)
+	return nil
+}
+```
+
+If any plugin in a profile implements this interface, the framework buffers the entire response before calling ProcessResponse.
 
 **`PostProcess`** — runs after all response plugins in the selected profile, always. The skeleton
 mirrors `PreProcess` but receives the response instead of the request.
@@ -249,24 +261,6 @@ func (p *MyPostProcessor) PostProcess(
     return nil
 }
 ```
-
-**`ResponseProcessor`** — called during the profile's response stage:
-
-The plugin can mutates the response in place via the same `InferenceMessage` helpers as `RequestProcessor`. Runs
-after the model server replies. Following is an example of adding a header to the response from the request cycle state.
-
-```go
-func (p *ModelNameToHeaderPlugin) ProcessResponse(ctx context.Context, cycleState *plugin.CycleState, response *requesthandling.InferenceResponse) error {
-	selectedModel, err := plugin.ReadCycleStateKey[string](cycleState, modelselector.SelectedModelCycleStateKey)
-	if err != nil {
-		log.FromContext(ctx).V(logutil.VERBOSE).Info("no selected model in CycleState, skipping")
-		return nil
-	}
-	response.SetHeader(bodyfieldtoheader.ModelHeader, selectedModel)
-	return nil
-}
-```
-
 
 ### Model-selector interfaces ([`modelselector`][modelselector-src])
 
@@ -356,10 +350,9 @@ func (p *MaxScorePicker) Pick(
 }
 ```
 
-
 ### Data-layer interfaces ([`datalayer/datasource`][datalayer-src])
 
-**`Extractor`** — called once per event batch; must filter internally to the event types it cares
+**`Extractor`** — called once per event batch, which includes one or more event; must filter internally to the event types it cares
 about. The example is from [`request-metadata-extractor`][requestmetadata-src], which increments and
 decrements per-model in-flight counters on request/response events:
 
@@ -407,8 +400,8 @@ func (e *RequestMetadataExtractor) Extract(_ context.Context, events []dlsrc.Eve
 }
 ```
 
-**`Collector`** — `Poll` is called on a timer at the interval returned by `CollectorFrequency`. No
-production collector exists in-tree yet; the skeleton below matches the interface:
+**`Collector`** — `Poll` is called on a timer at the interval returned by `CollectorFrequency`.
+The skeleton below matches the interface:
 
 ```go
 func (c *MyCollector) Poll(_ context.Context) (any, error) { 
