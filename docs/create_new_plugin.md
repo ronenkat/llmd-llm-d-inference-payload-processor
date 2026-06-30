@@ -35,8 +35,7 @@ defined in three packages:
 
 | Interface | Package | Role |
 |-----------|---------|------|
-| `PreProcessor` / `PostProcessor` | [`requesthandling`][requesthandling-src] | Reserved global stages (before profile selection / after the response plugins). |
-| `RequestProcessor` | [`requesthandling`][requesthandling-src] | Inspect and mutate the request before routing. |
+| `RequestProcessor` | [`requesthandling`][requesthandling-src] | Inspect and mutate the request before routing. Can be run as part of a profile, or prior to picking a profile. |
 | `ResponseProcessor` | [`requesthandling`][requesthandling-src] | Inspect and mutate the response on its way back. |
 | `ProfilePicker` | [`requesthandling`][requesthandling-src] | Choose which profile runs for a request. |
 | `Filter` / `Scorer` / `Picker` | [`modelselector`][modelselector-src] | The `Filter → Score → Pick` phases that select a *model*. |
@@ -178,8 +177,7 @@ Following is the available interfaces that can be implemented.
 
 ### Request-handling interfaces
 
-In addition to `ProcessRequest`, there are additional request processing interfaces to extend the 
-request and response pipeline processing.
+In addition to `ProcessRequest`, there are additional request processing interfaces, such as **`ProfilePicker`** and **`PreProcess`**.
 
 **`ProfilePicker`** — called once per request to select the profile to run. The implementation below
 is the built-in [`single-profile-picker`][single-profile-picker-src], which asserts exactly one
@@ -208,23 +206,6 @@ func (p *SingleProfilePicker) Pick(
 }
 ```
 
-**`PreProcess`** — runs before profile selection, regardless of which profile is chosen. The skeleton
-below shows the minimum required to satisfy the interface. Returning a
-non-nil error short-circuits the pipeline for that request.
-
-```go
-// PreProcess is invoked to pre-process requests before the request plugins of the
-// selected profile run.
-func (p *MyPreProcessor) PreProcess(
-    ctx context.Context,
-    cycleState *plugin.CycleState,
-    request *requesthandling.InferenceRequest,
-) error {
-    // Inspect or mutate request.Body / request headers here.
-    // Return non-nil to abort the request.
-    return nil
-}
-```
 **`ResponseProcessor`** — called during the profile's response stage before sending the response to the user:
 
 The plugin can mutates the response in place via the same `InferenceMessage` helpers as `RequestProcessor`. Runs
@@ -241,26 +222,7 @@ func (p *ModelNameToHeaderPlugin) ProcessResponse(ctx context.Context, cycleStat
 	return nil
 }
 ```
-
 If any plugin in a profile implements this interface, the framework buffers the entire response before calling ProcessResponse.
-
-**`PostProcess`** — runs after all response plugins in the selected profile, always. The skeleton
-mirrors `PreProcess` but receives the response instead of the request.
-Returning a non-nil error short-circuits the pipeline for that response.
-
-```go
-// PostProcess is invoked to post-process requests after the response plugins of the
-// selected profile run.
-func (p *MyPostProcessor) PostProcess(
-    ctx context.Context,
-    cycleState *plugin.CycleState,
-    response *requesthandling.InferenceResponse,
-) error {
-    // Inspect or mutate response.Body / response headers here.
-    // Return non-nil to abort response delivery.
-    return nil
-}
-```
 
 ### Model-selector interfaces ([`modelselector`][modelselector-src])
 
