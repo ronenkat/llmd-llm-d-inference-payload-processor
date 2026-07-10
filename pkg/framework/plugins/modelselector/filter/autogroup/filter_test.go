@@ -150,11 +150,12 @@ func TestAutoGroupFilter_Filter(t *testing.T) {
 			modelBody: "auto/unknowngroup",
 			want:      []string{},
 		},
-		// Non-auto string that doesn't match any known pattern → empty result.
+		// A plain model name without the "auto/" prefix is not this filter's
+		// responsibility — all candidates pass through unchanged.
 		{
-			name:      "plain model name (non-auto) yields empty",
+			name:      "plain model name without auto prefix passes all through",
 			modelBody: "qwen3-8b",
-			want:      []string{},
+			want:      all,
 		},
 		// Non-string type → malformed → empty result.
 		{

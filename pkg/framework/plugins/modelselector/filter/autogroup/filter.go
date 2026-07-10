@@ -100,9 +100,9 @@ func (f *AutoGroupFilter) WithName(name string) *AutoGroupFilter {
 }
 
 // Filter returns the candidate models based on the "model" field of the request:
-//   - absent, empty, or exactly "auto": all candidates pass through.
+//   - absent, empty, exactly "auto", or any string without the "auto/" prefix: all candidates pass through.
 //   - "auto/<group-name>": candidates whose name appears in the named group.
-//   - any other value or non-string type: no candidates (pipeline rejects with 429).
+//   - "auto/" (empty group name), unknown group, or non-string type: no candidates (pipeline rejects with 429).
 func (f *AutoGroupFilter) Filter(ctx context.Context, _ *plugin.CycleState, request *requesthandling.InferenceRequest, models []datalayer.Model) []datalayer.Model {
 	logger := log.FromContext(ctx)
 
@@ -113,17 +113,12 @@ func (f *AutoGroupFilter) Filter(ctx context.Context, _ *plugin.CycleState, requ
 		return []datalayer.Model{}
 	}
 
-	// Empty, absent, or bare "auto" → pass all candidates through.
-	if requested == "" || requested == autoPrefix {
-		logger.V(logutil.VERBOSE).Info("auto model field, all candidates kept", "field", requestModelField)
-		return models
-	}
-
-	// Must start with "auto/" to be handled by this filter; anything else is
-	// a model name not relevant to this filter (not prefixed with "auto").
+	// This filter only acts on "auto/" prefixed model names. Any other string
+	// (including absent, empty, bare "auto", or a plain model name) is not this
+	// filter's responsibility — pass all candidates through unchanged.
 	if !strings.HasPrefix(requested, autoGroupSeparator) {
-		logger.V(logutil.VERBOSE).Info("model field is not an auto-group selector, no candidates", "requested", requested)
-		return []datalayer.Model{}
+		logger.V(logutil.VERBOSE).Info("model field is not an auto-group selector, all candidates kept", "requested", requested)
+		return models
 	}
 
 	groupName := strings.TrimPrefix(requested, autoGroupSeparator)
