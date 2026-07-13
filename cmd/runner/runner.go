@@ -49,7 +49,7 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 	modelconfigcollector "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/modelconfigcollector"
 	requestmetadata "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/datalayer/requestmetadata"
-	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/filter/autogroup"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/filter/modelgroup"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/filter/modelname"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/maxscore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/plugins/modelselector/picker/random"
@@ -297,7 +297,7 @@ func (r *Runner) registerInTreePlugins() {
 	plugin.Register(modelconfigcollector.PluginType, modelconfigcollector.DatasourceFactory)
 	// register model selector plugins
 	plugin.Register(modelname.ModelNameFilterType, modelname.ModelNameFilterFactory)
-	plugin.Register(autogroup.AutoGroupFilterType, autogroup.AutoGroupFilterFactory)
+	plugin.Register(modelgroup.ModelGroupFilterType, modelgroup.ModelGroupFilterFactory)
 	plugin.Register(random.RandomPickerType, random.RandomPickerFactory)
 	plugin.Register(maxscore.MaxScorePickerType, maxscore.MaxScorePickerFactory)
 	plugin.Register(weightedrandom.WeightedRandomPickerType, weightedrandom.WeightedRandomPickerFactory)

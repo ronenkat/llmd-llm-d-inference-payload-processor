@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package autogroup
+package modelgroup
 
 import (
 	"context"
@@ -56,36 +56,36 @@ func requestWithModel(value any) *requesthandling.InferenceRequest {
 	return r
 }
 
-// TestAutoGroupFilterFactory verifies that the factory parses parameters
+// TestModelGroupFilterFactory verifies that the factory parses parameters
 // correctly and carries the right type and instance name.
-func TestAutoGroupFilterFactory(t *testing.T) {
+func TestModelGroupFilterFactory(t *testing.T) {
 	params := json.RawMessage(`{"qwen3models": ["qwen3-8b", "qwen3-32b"]}`)
-	p, err := AutoGroupFilterFactory("my-filter", params, nil)
+	p, err := ModelGroupFilterFactory("my-filter", params, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	f := p.(*AutoGroupFilter)
+	f := p.(*ModelGroupFilter)
 	if got := f.TypedName().Name; got != "my-filter" {
 		t.Errorf("Name = %s, want my-filter", got)
 	}
-	if got := f.TypedName().Type; got != AutoGroupFilterType {
-		t.Errorf("Type = %s, want %s", got, AutoGroupFilterType)
+	if got := f.TypedName().Type; got != ModelGroupFilterType {
+		t.Errorf("Type = %s, want %s", got, ModelGroupFilterType)
 	}
 }
 
-// TestAutoGroupFilterFactory_InvalidJSON verifies that malformed parameters
+// TestModelGroupFilterFactory_InvalidJSON verifies that malformed parameters
 // cause the factory to return an error.
-func TestAutoGroupFilterFactory_InvalidJSON(t *testing.T) {
-	_, err := AutoGroupFilterFactory("f", json.RawMessage(`{invalid`), nil)
+func TestModelGroupFilterFactory_InvalidJSON(t *testing.T) {
+	_, err := ModelGroupFilterFactory("f", json.RawMessage(`{invalid`), nil)
 	if err == nil {
 		t.Fatal("expected error for invalid JSON params, got nil")
 	}
 }
 
-// TestAutoGroupFilterFactory_EmptyParams verifies that an empty/nil params
+// TestModelGroupFilterFactory_EmptyParams verifies that an empty/nil params
 // payload creates a filter with no groups (pass-all on "auto").
-func TestAutoGroupFilterFactory_EmptyParams(t *testing.T) {
-	p, err := AutoGroupFilterFactory("f", nil, nil)
+func TestModelGroupFilterFactory_EmptyParams(t *testing.T) {
+	p, err := ModelGroupFilterFactory("f", nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,8 +94,64 @@ func TestAutoGroupFilterFactory_EmptyParams(t *testing.T) {
 	}
 }
 
-// TestAutoGroupFilter_Filter covers all behavioural cases described in the README.
-func TestAutoGroupFilter_Filter(t *testing.T) {
+// TestModelGroupFilter_NoGroupsConfigured verifies filtering behavior when no
+// groups are configured at all: an "auto/<group-name>" selector always fails
+// (there is nothing to match), while an explicit, available model name still
+// succeeds via the exact-match path.
+func TestModelGroupFilter_NoGroupsConfigured(t *testing.T) {
+	f := NewModelGroupFilter(nil)
+	candidates := candidateModels("qwen3-8b", "qwen3-32b")
+
+	t.Run("auto/somegroup fails with no groups defined", func(t *testing.T) {
+		req := requestWithModel("auto/somegroup")
+		got := modelNames(f.Filter(context.Background(), nil, req, candidates))
+		if len(got) != 0 {
+			t.Errorf("Filter() = %v, want empty", got)
+		}
+	})
+
+	t.Run("explicit valid model name succeeds with no groups defined", func(t *testing.T) {
+		req := requestWithModel("qwen3-8b")
+		got := modelNames(f.Filter(context.Background(), nil, req, candidates))
+		want := []string{"qwen3-8b"}
+		if len(got) != len(want) || got[0] != want[0] {
+			t.Errorf("Filter() = %v, want %v", got, want)
+		}
+	})
+}
+
+// TestNewModelGroupFilter_SkipsInvalidGroups verifies that groups with an
+// empty name, an empty model list, or an empty model name in the list are
+// skipped, while valid groups configured alongside them still load.
+func TestNewModelGroupFilter_SkipsInvalidGroups(t *testing.T) {
+	groups := map[string][]string{
+		"valid":        {"qwen3-8b", "qwen3-32b"},
+		"":             {"llama3-8b"},
+		"empty-models": {},
+		"blank-model":  {"llama3-8b", ""},
+	}
+
+	f := NewModelGroupFilter(groups)
+
+	if _, ok := f.groups["valid"]; !ok {
+		t.Error("expected valid group to be loaded")
+	}
+	if _, ok := f.groups[""]; ok {
+		t.Error("expected group with empty name to be skipped")
+	}
+	if _, ok := f.groups["empty-models"]; ok {
+		t.Error("expected group with empty model list to be skipped")
+	}
+	if _, ok := f.groups["blank-model"]; ok {
+		t.Error("expected group with a blank model name to be skipped")
+	}
+	if len(f.groups) != 1 {
+		t.Errorf("expected exactly 1 loaded group, got %d", len(f.groups))
+	}
+}
+
+// TestModelGroupFilter_Filter covers all behavioural cases described in the README.
+func TestModelGroupFilter_Filter(t *testing.T) {
 	groups := map[string][]string{
 		"qwen3models": {"qwen3-8b", "qwen3-32b"},
 		"llama3":      {"llama3-8b", "llama3-70b"},
@@ -150,12 +206,19 @@ func TestAutoGroupFilter_Filter(t *testing.T) {
 			modelBody: "auto/unknowngroup",
 			want:      []string{},
 		},
-		// A plain model name without the "auto/" prefix is not this filter's
-		// responsibility — all candidates pass through unchanged.
+		// A plain model name without the "auto/" prefix that IS in the
+		// candidate list is now matched explicitly, pinning the result to it.
 		{
-			name:      "plain model name without auto prefix passes all through",
+			name:      "registered plain model name is matched explicitly",
 			modelBody: "qwen3-8b",
-			want:      all,
+			want:      []string{"qwen3-8b"},
+		},
+		// A plain model name without the "auto/" prefix that is NOT in the
+		// candidate list yields no candidates (pipeline rejects with 429).
+		{
+			name:      "unregistered plain model name yields empty",
+			modelBody: "gpt-4",
+			want:      []string{},
 		},
 		// Non-string type → malformed → empty result.
 		{
@@ -169,29 +232,14 @@ func TestAutoGroupFilter_Filter(t *testing.T) {
 			modelBody: []any{"qwen3-8b", "qwen3-32b"},
 			want:      []string{},
 		},
-		// Group exists but none of the group models are in the candidate list.
-		// This is a special case where we set the candidates to "mistral-7b".
-		{
-			name:      "group models not in candidates yields empty",
-			modelBody: "auto/qwen3models",
-			// Use a custom candidate set that excludes qwen group models.
-			want: []string{},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := NewAutoGroupFilter(groups)
+			f := NewModelGroupFilter(groups)
 			req := requestWithModel(tt.modelBody)
 
-			// For the "group models not in candidates" case, use a restricted
-			// candidate set; otherwise use all.
-			candidates := candidateModels(all...)
-			if tt.name == "group models not in candidates yields empty" {
-				candidates = candidateModels("mistral-7b")
-			}
-
-			got := modelNames(f.Filter(context.Background(), nil, req, candidates))
+			got := modelNames(f.Filter(context.Background(), nil, req, candidateModels(all...)))
 			want := append([]string{}, tt.want...)
 			sort.Strings(want)
 
@@ -208,17 +256,36 @@ func TestAutoGroupFilter_Filter(t *testing.T) {
 	}
 }
 
-// TestAutoGroupFilter_PartialGroupInCandidates verifies that when only a
+// TestModelGroupFilter_GroupModelsNotInCandidates verifies that when a
+// requested group is known but none of its models appear in the candidate
+// list, the filter returns no candidates.
+func TestModelGroupFilter_GroupModelsNotInCandidates(t *testing.T) {
+	groups := map[string][]string{
+		"qwen3models": {"qwen3-8b", "qwen3-32b"},
+	}
+	// Candidate set excludes every model in the qwen3models group.
+	candidates := candidateModels("mistral-7b")
+
+	f := NewModelGroupFilter(groups)
+	req := requestWithModel("auto/qwen3models")
+
+	got := modelNames(f.Filter(context.Background(), nil, req, candidates))
+	if len(got) != 0 {
+		t.Errorf("Filter() = %v, want empty", got)
+	}
+}
+
+// TestModelGroupFilter_PartialGroupInCandidates verifies that when only a
 // subset of the group's models are present in the candidate list, only those
 // present are returned.
-func TestAutoGroupFilter_PartialGroupInCandidates(t *testing.T) {
+func TestModelGroupFilter_PartialGroupInCandidates(t *testing.T) {
 	groups := map[string][]string{
 		"qwen3models": {"qwen3-8b", "qwen3-32b", "qwen3-72b"},
 	}
 	// Only qwen3-8b and qwen3-72b are in the data layer; qwen3-32b is absent.
 	candidates := candidateModels("qwen3-8b", "qwen3-72b", "mistral-7b")
 
-	f := NewAutoGroupFilter(groups)
+	f := NewModelGroupFilter(groups)
 	req := requestWithModel("auto/qwen3models")
 
 	got := modelNames(f.Filter(context.Background(), nil, req, candidates))
