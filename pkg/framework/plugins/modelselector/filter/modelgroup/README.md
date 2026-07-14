@@ -16,7 +16,7 @@ When the model name is set to `auto/group-name` the filter matches the requested
 
 1. Reads the `model` field from the request body.
 3. If the field is absent, an empty string or `auto`, all incoming candidates are kept.
-3. If the `model` field is formatted as  `auto/group-name`, with the prefix `auto` and separtor `/`, it extract `group-name` and looks up the group-name in the filter parameters. All candidate model names from the data layer that also appear in the group are kept.
+3. If the `model` field is formatted as  `auto/group-name`, with the prefix `auto` and separator `/`, it extract `group-name` and looks up the group-name in the filter parameters. All candidate model names from the data layer that also appear in the group are kept.
 4. If the `model` field is a valid non-empty string that does not start with the prefix `auto`, the model name is considered the only one that should be in the candidate list and kept.
 5. If the intersection is empty or the field is malformed (not a string), the filter returns no candidates and the pipeline rejects the request with HTTP 429.
 

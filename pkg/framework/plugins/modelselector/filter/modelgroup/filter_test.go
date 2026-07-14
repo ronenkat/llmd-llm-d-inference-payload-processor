@@ -28,9 +28,9 @@ import (
 
 // candidateModels builds the datalayer models handed to the filter.
 func candidateModels(names ...string) []datalayer.Model {
-	models := make([]datalayer.Model, 0, len(names))
-	for _, n := range names {
-		models = append(models, datalayer.NewModel(n))
+	models := make([]datalayer.Model, len(names))
+	for idx, name := range names {
+		models[idx] = datalayer.NewModel(name)
 	}
 	return models
 }
@@ -38,9 +38,9 @@ func candidateModels(names ...string) []datalayer.Model {
 // modelNames extracts the sorted model names of a filter result, for
 // order-insensitive comparison against the expected names.
 func modelNames(models []datalayer.Model) []string {
-	out := make([]string, 0, len(models))
-	for _, m := range models {
-		out = append(out, m.GetName())
+	out := make([]string, len(models))
+	for idx, model := range models {
+		out[idx] = model.GetName()
 	}
 	sort.Strings(out)
 	return out
