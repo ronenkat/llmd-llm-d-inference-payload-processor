@@ -28,6 +28,7 @@ import (
 
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/datastore"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/modelgroups"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer/pricing"
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/plugin"
 )
@@ -481,4 +482,192 @@ func floatCloseEnough(a, b float64) bool {
 		diff = -diff
 	}
 	return diff < priceFloatEpsilon
+}
+
+// readGroups fetches the modelgroups.Groups stored on modelName, if any.
+func readGroups(t *testing.T, ds datalayer.Datastore, modelName string) (modelgroups.Groups, bool) {
+	t.Helper()
+	v, ok := ds.GetOrCreateModel(modelName).GetAttributes().Get(modelgroups.GroupsAttributeKey)
+	if !ok {
+		return nil, false
+	}
+	g, ok := v.(modelgroups.Groups)
+	if !ok {
+		t.Fatalf("model %q: attribute %q is %T, want modelgroups.Groups", modelName, modelgroups.GroupsAttributeKey, v)
+	}
+	return g, true
+}
+
+// groupsEqual compares two Groups values order-insensitively.
+func groupsEqual(a, b modelgroups.Groups) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	counts := make(map[string]int, len(a))
+	for _, name := range a {
+		counts[name]++
+	}
+	for _, name := range b {
+		counts[name]--
+	}
+	for _, c := range counts {
+		if c != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// waitForGroups polls until modelName's Groups attribute equals want (present) or,
+// when want is empty, until the attribute is absent, or the deadline expires.
+func waitForGroups(t *testing.T, ds datalayer.Datastore, modelName string, want modelgroups.Groups, timeout time.Duration) (modelgroups.Groups, bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var got modelgroups.Groups
+	var ok bool
+	for time.Now().Before(deadline) {
+		got, ok = readGroups(t, ds, modelName)
+		if len(want) == 0 {
+			if !ok {
+				return got, ok
+			}
+		} else if ok && groupsEqual(got, want) {
+			return got, ok
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return got, ok
+}
+
+// --- Group-configuration tests ---
+
+// TestStart_GroupMembership verifies that the group-centric "groups" list in the
+// config file ({name, models[]}) is inverted into a per-model modelgroups.Groups
+// attribute on each referenced model, across a range of valid and invalid
+// group configurations.
+func TestStart_GroupMembership(t *testing.T) {
+	tests := []struct {
+		name       string
+		models     []ModelConfiguration
+		groups     []ModelGroupConfig
+		want       map[string]modelgroups.Groups // absent/empty means "expect no groups attribute"
+		wantModels []string                      // optional: asserts exactly these models are registered
+	}{
+		{
+			name: "multiple groups partition models",
+			models: []ModelConfiguration{
+				{Name: "qwen3-8b"}, {Name: "gpt-oss-20b"}, {Name: "gpt-oss-120b"}, {Name: "gemma4"},
+			},
+			groups: []ModelGroupConfig{
+				{Name: "fast", Models: []string{"qwen3-8b", "gpt-oss-20b"}},
+				{Name: "planning", Models: []string{"gpt-oss-120b", "gemma4"}},
+			},
+			want: map[string]modelgroups.Groups{
+				"qwen3-8b":     {"fast"},
+				"gpt-oss-20b":  {"fast"},
+				"gpt-oss-120b": {"planning"},
+				"gemma4":       {"planning"},
+			},
+		},
+		{
+			name:   "model in multiple groups",
+			models: []ModelConfiguration{{Name: "qwen3-32b"}},
+			groups: []ModelGroupConfig{
+				{Name: "qwen3models", Models: []string{"qwen3-32b"}},
+				{Name: "large-models", Models: []string{"qwen3-32b"}},
+			},
+			want: map[string]modelgroups.Groups{
+				"qwen3-32b": {"qwen3models", "large-models"},
+			},
+		},
+		{
+			name:   "invalid group name or empty models skipped",
+			models: []ModelConfiguration{{Name: "m1"}, {Name: "m2"}},
+			groups: []ModelGroupConfig{
+				{Name: "", Models: []string{"m1"}},
+				{Name: "empty-models", Models: []string{}},
+				{Name: "valid", Models: []string{"m2"}},
+			},
+			want: map[string]modelgroups.Groups{
+				"m1": nil,
+				"m2": {"valid"},
+			},
+		},
+		{
+			name:   "group referencing unknown model is skipped",
+			models: []ModelConfiguration{{Name: "known"}},
+			groups: []ModelGroupConfig{
+				{Name: "g1", Models: []string{"unknown-model"}},
+			},
+			want:       map[string]modelgroups.Groups{"known": nil},
+			wantModels: []string{"known"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ds := datastore.NewFakeDataStore()
+			path := writeTempModelsConfig(t, ModelsConfig{Models: tc.models, Groups: tc.groups})
+			c := useFactory(t, path, ds)
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(func() { cancel(); c.Stop() })
+
+			if err := c.Start(ctx); err != nil {
+				t.Fatalf("Start failed: %v", err)
+			}
+
+			for modelName, want := range tc.want {
+				got, ok := readGroups(t, ds, modelName)
+				if len(want) == 0 {
+					if ok {
+						t.Errorf("model %q: expected no groups attribute, got %v", modelName, got)
+					}
+					continue
+				}
+				if !ok {
+					t.Errorf("model %q: expected groups attribute to be set", modelName)
+					continue
+				}
+				if !groupsEqual(got, want) {
+					t.Errorf("model %q: groups = %v, want %v", modelName, got, want)
+				}
+			}
+
+			if tc.wantModels != nil {
+				got := ds.Models()
+				if !groupsEqual(modelgroups.Groups(got), modelgroups.Groups(tc.wantModels)) {
+					t.Errorf("expected registered models %v, got %v", tc.wantModels, got)
+				}
+			}
+		})
+	}
+}
+
+// TestStart_FileChange_GroupMembershipRemoved verifies that when a model's group
+// membership is dropped from the config file on a later reload, its stale
+// modelgroups.Groups attribute is cleared rather than left in place.
+func TestStart_FileChange_GroupMembershipRemoved(t *testing.T) {
+	ds := datastore.NewFakeDataStore()
+	path := writeTempModelsConfig(t, ModelsConfig{
+		Models: []ModelConfiguration{{Name: "m1"}},
+		Groups: []ModelGroupConfig{{Name: "g1", Models: []string{"m1"}}},
+	})
+	c := useFactory(t, path, ds)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); c.Stop() })
+
+	if err := c.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if _, ok := readGroups(t, ds, "m1"); !ok {
+		t.Fatal("expected m1 to have groups attribute set before file change")
+	}
+
+	overwriteFile(t, path, ModelsConfig{
+		Models: []ModelConfiguration{{Name: "m1"}},
+	})
+
+	if _, ok := waitForGroups(t, ds, "m1", nil, 2*time.Second); ok {
+		t.Error("expected m1's groups attribute to be cleared after group removed from config")
+	}
 }
