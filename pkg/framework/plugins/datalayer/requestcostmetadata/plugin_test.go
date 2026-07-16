@@ -72,7 +72,7 @@ func makeResponseEvent(model string, promptTokens, completionTokens float64, omi
 
 // makeAnthropicResponseEvent builds a ResponseEventType event whose usage block
 // uses Anthropic field names (input_tokens / output_tokens).
-func makeAnthropicResponseEvent(model string, inputTokens, outputTokens float64, omitUsage bool) dlsrc.Event {
+func makeAnthropicResponseEvent(model string, inputTokens, outputTokens float64, omitUsage bool) dlsrc.Event { //nolint:unparam
 	req := requesthandling.NewInferenceRequest()
 	req.Body["model"] = model
 	resp := requesthandling.NewInferenceResponse()
@@ -94,7 +94,7 @@ func makeAnthropicResponseEvent(model string, inputTokens, outputTokens float64,
 
 // makeGoogleResponseEvent builds a ResponseEventType event whose usage block
 // uses Google/Gemini field names (usageMetadata.promptTokenCount / candidatesTokenCount).
-func makeGoogleResponseEvent(model string, promptTokenCount, candidatesTokenCount float64, omitUsage bool) dlsrc.Event {
+func makeGoogleResponseEvent(model string, promptTokenCount, candidatesTokenCount float64, omitUsage bool) dlsrc.Event { //nolint:unparam
 	req := requesthandling.NewInferenceRequest()
 	req.Body["model"] = model
 	resp := requesthandling.NewInferenceResponse()
