@@ -341,29 +341,6 @@ func readTokenPrices(t *testing.T, ds datalayer.Datastore) *pricing.TokenPrices 
 	return tp
 }
 
-// waitForTokenPrices polls until the *pricing.TokenPrices on priceTestModelName matches
-// want (both fields within priceFloatEpsilon) or the deadline expires. Returns the last
-// observed value (zero-valued *TokenPrices if nothing was ever observed).
-func waitForTokenPrices(t *testing.T, ds datalayer.Datastore, want *pricing.TokenPrices, timeout time.Duration) *pricing.TokenPrices {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	got := &pricing.TokenPrices{}
-	for time.Now().Before(deadline) {
-		v, ok := ds.GetOrCreateModel(priceTestModelName).GetAttributes().Get(pricing.TokenPricesAttributeKey)
-		if ok {
-			if tp, ok := v.(*pricing.TokenPrices); ok {
-				got = tp
-				if floatCloseEnough(got.InputTokenPrice, want.InputTokenPrice) &&
-					floatCloseEnough(got.OutputTokenPrice, want.OutputTokenPrice) {
-					return got
-				}
-			}
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	return got
-}
-
 // TestStart_PopulatesPrices verifies that the per-million-tokens prices in the
 // config's nested "pricing" block are stored on the registered Model as per-token
 // prices (each field divided by 1e6) inside a single *pricing.TokenPrices attribute.
