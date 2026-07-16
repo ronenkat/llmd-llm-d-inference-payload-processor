@@ -16,11 +16,12 @@ It is registered as type `model-config-datasource` and runs as a datalayer datas
    reload, the attribute is updated; if all memberships are removed, the attribute is deleted.
 4. Removes any model from the datastore that no longer appears in the file.
 5. Watches the file's **parent directory** for `Write`, `Create`, `Remove`, and `Rename` events,
-   re-syncing on every relevant `Write` or `Create` change.
+   re-syncing on every relevant change.
 
 The directory is watched rather than the file directly to handle atomic rename-based replacements,
-such as Kubernetes ConfigMap remounts. On `Remove` or `Rename` of the config file, the datasource
-logs and waits for the file to reappear.
+such as Kubernetes ConfigMap remounts. A missing or empty config file — including when the file is
+deleted or renamed away — is treated as an empty config: the datastore is immediately cleared of
+every model. Models repopulate automatically once a valid file reappears at `modelsPath`.
 
 ## Behavioral Intent
 

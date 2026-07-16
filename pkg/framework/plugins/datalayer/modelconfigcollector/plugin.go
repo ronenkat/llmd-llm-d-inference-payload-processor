@@ -122,7 +122,11 @@ func (c *ModelConfigDataSource) TypedName() plugin.TypedName { return c.typedNam
 func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx).WithName("model-config-datasource")
 
-	if err := c.syncModels(ctx); err != nil {
+	data, err := readModelsFile(c.absModelsPath)
+	if err != nil {
+		return err
+	}
+	if err := c.syncModels(ctx, data); err != nil {
 		return err
 	}
 
@@ -160,11 +164,19 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 					continue
 				}
 				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
-					if err := c.syncModels(ctx); err != nil {
+					data, err := readModelsFile(c.absModelsPath)
+					if err != nil {
+						logger.Error(err, "failed to read models config after file change")
+						continue
+					}
+					if err := c.syncModels(ctx, data); err != nil {
 						logger.Error(err, "failed to sync models after file change")
 					}
 				} else if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
-					logger.Info("models config file removed or renamed; waiting for replacement", "path", c.absModelsPath)
+					logger.Info("models config file removed or renamed; clearing models until replacement appears", "path", c.absModelsPath)
+					if err := c.syncModels(ctx, nil); err != nil {
+						logger.Error(err, "failed to clear models after file removal or rename")
+					}
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
@@ -184,21 +196,34 @@ func (c *ModelConfigDataSource) Stop() {
 	<-c.doneCh
 }
 
-// syncModels reads the config file, registers every valid listed model in the datastore,
-// removes any datastore model that no longer appears in the file, and (re)populates each
-// model's group membership from the config's group-centric "groups" list.
-func (c *ModelConfigDataSource) syncModels(ctx context.Context) error {
+// readModelsFile reads the config file at path, treating a missing file as empty
+// content rather than an error so callers can converge to an empty config when the
+// file has been deleted or renamed away.
+func readModelsFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
+// syncModels registers every valid model listed in data in the datastore, removes any
+// datastore model that no longer appears in data, and (re)populates each model's group
+// membership from the config's group-centric "groups" list. Empty data (an empty or
+// missing config file) is treated as an empty config, which clears every model from
+// the datastore.
+func (c *ModelConfigDataSource) syncModels(ctx context.Context, data []byte) error {
 	logger := log.FromContext(ctx).WithName("model-config-datasource")
 
-	data, err := os.ReadFile(c.absModelsPath)
-	if err != nil {
-		return err
-	}
-
 	var cfg ModelsConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		logger.Error(err, "failed to parse models config", "raw", string(data))
-		return err
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			logger.Error(err, "failed to parse models config", "raw", string(data))
+			return err
+		}
 	}
 
 	// membership maps a model name to the group names it belongs to, inverting the
