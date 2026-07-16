@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -423,10 +424,16 @@ func floatCloseEnough(a, b float64) bool {
 	return diff < priceFloatEpsilon
 }
 
-// readGroups fetches the modelgroups.Groups stored on modelName, if any.
+// readGroups fetches the modelgroups.Groups stored on modelName, if any. It looks
+// the model up via GetModels rather than GetOrCreateModel so a name that was never
+// registered by syncModels is reported as "not found" rather than silently created.
 func readGroups(t *testing.T, ds datalayer.Datastore, modelName string) (modelgroups.Groups, bool) {
 	t.Helper()
-	v, ok := ds.GetOrCreateModel(modelName).GetAttributes().Get(modelgroups.GroupsAttributeKey)
+	matches := ds.GetModels(func(m datalayer.Model) bool { return m.GetName() == modelName })
+	if len(matches) == 0 {
+		return nil, false
+	}
+	v, ok := matches[0].GetAttributes().Get(modelgroups.GroupsAttributeKey)
 	if !ok {
 		return nil, false
 	}
@@ -437,24 +444,17 @@ func readGroups(t *testing.T, ds datalayer.Datastore, modelName string) (modelgr
 	return g, true
 }
 
-// groupsEqual compares two Groups values order-insensitively.
+// groupsEqual compares two Groups values order-insensitively. slices.Sort sorts
+// in place, so each input is cloned first to avoid mutating the caller's slice.
 func groupsEqual(a, b modelgroups.Groups) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	counts := make(map[string]int, len(a))
-	for _, name := range a {
-		counts[name]++
-	}
-	for _, name := range b {
-		counts[name]--
-	}
-	for _, c := range counts {
-		if c != 0 {
-			return false
-		}
-	}
-	return true
+	sortedA := slices.Clone(a)
+	sortedB := slices.Clone(b)
+	slices.Sort(sortedA)
+	slices.Sort(sortedB)
+	return slices.Compare(sortedA, sortedB) == 0
 }
 
 // --- Group-configuration tests ---
@@ -499,11 +499,33 @@ func TestStart_GroupMembership(t *testing.T) {
 			},
 		},
 		{
-			name:   "invalid group name or empty models skipped",
+			name:   "group with empty models list is skipped, others still processed",
+			models: []ModelConfiguration{{Name: "m1"}, {Name: "m2"}},
+			groups: []ModelGroupConfig{
+				{Name: "empty-models", Models: []string{}},
+				{Name: "valid", Models: []string{"m2"}},
+			},
+			want: map[string]modelgroups.Groups{
+				"m1": nil,
+				"m2": {"valid"},
+			},
+		},
+		{
+			name:   "empty model name within a group is skipped, others still processed",
+			models: []ModelConfiguration{{Name: "m1"}, {Name: "m2"}},
+			groups: []ModelGroupConfig{
+				{Name: "mixed", Models: []string{"", "m2"}},
+			},
+			want: map[string]modelgroups.Groups{
+				"m1": nil,
+				"m2": {"mixed"},
+			},
+		},
+		{
+			name:   "group with empty name is skipped",
 			models: []ModelConfiguration{{Name: "m1"}, {Name: "m2"}},
 			groups: []ModelGroupConfig{
 				{Name: "", Models: []string{"m1"}},
-				{Name: "empty-models", Models: []string{}},
 				{Name: "valid", Models: []string{"m2"}},
 			},
 			want: map[string]modelgroups.Groups{

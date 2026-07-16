@@ -37,7 +37,7 @@ plugins:
 ```
 
 Group membership itself is configured on the `model-config-datasource` plugin's config file, not here.
-That plugin's config file (pointed to by its `modelsPath` parameter) lists models (ommited in the example) and,
+That plugin's config file (pointed to by its `modelsPath` parameter) lists models (omitted in the example) and,
 alongside them, a `groups` section mapping a group name to the model names that belong to it:
 
 ```json
@@ -49,7 +49,7 @@ alongside them, a `groups` section mapping a group name to the model names that 
 }
 ```
 
-With this configuration snipnet, a request with `model` set to `auto/fast` is filtered to the candidates `qwen3-8b` and
+With this configuration snippet, a request with `model` set to `auto/fast` is filtered to the candidates `qwen3-8b` and
 `gpt-oss-20b`; `auto/planning` is filtered to `gpt-oss-120b` and `gemma4`. A model can appear in more than
 one group's `models` list. A group with an empty `name` or an empty `models` list is skipped (logged as a
 warning) by `model-config-datasource`, as is a group entry naming a model not present in the top-level

@@ -203,10 +203,13 @@ func (c *ModelConfigDataSource) syncModels(ctx context.Context) error {
 
 	// membership maps a model name to the group names it belongs to, inverting the
 	// config's group-centric "groups" list ({name, models[]}) so it can be looked up
-	// per model below. A group with an empty name or an empty model list is invalid
-	// and is skipped entirely (with a warning); membership is only resolved against
-	// the "models" list once that loop below has run, so a group can reference a
-	// model before its validity as a model entry is known.
+	// per model below. Membership is only resolved against the "models" list once
+	// that loop below has run, so a group can reference a model before its validity
+	// as a model entry is known.
+	// A group with an empty name or an empty model list is invalid as the filter's
+	// "auto/<group-name>" syntax requires non-empty group-name.
+	// An individual empty model name within an otherwise valid group is
+	// skipped on its own.
 	membership := make(map[string]modelgroups.Groups)
 	for _, g := range cfg.Groups {
 		if g.Name == "" || len(g.Models) == 0 {
@@ -214,11 +217,16 @@ func (c *ModelConfigDataSource) syncModels(ctx context.Context) error {
 			continue
 		}
 		for _, modelName := range g.Models {
+			if modelName == "" {
+				logger.Info("skipping empty model name in group configuration", "group", g.Name)
+				continue
+			}
 			membership[modelName] = append(membership[modelName], g.Name)
 		}
 	}
 
 	desired := make(map[string]struct{}, len(cfg.Models))
+	invalid := make(map[string]struct{}, len(cfg.Models))
 	for _, m := range cfg.Models {
 		if m.Name == "" {
 			logger.Info("skipping model entry with empty name")
@@ -229,6 +237,7 @@ func (c *ModelConfigDataSource) syncModels(ctx context.Context) error {
 				"model", m.Name,
 				"input_per_million", m.Pricing.InputPerMillion,
 				"output_per_million", m.Pricing.OutputPerMillion)
+			invalid[m.Name] = struct{}{}
 			continue
 		}
 		desired[m.Name] = struct{}{}
@@ -243,10 +252,18 @@ func (c *ModelConfigDataSource) syncModels(ctx context.Context) error {
 		}
 	}
 
-	// A group may reference a model name that isn't a valid "models" entry (missing,
-	// or skipped above). Group membership never auto-creates a model, so just warn.
+	// A group may reference a model name that isn't a valid "models" entry: either
+	// missing from "models" entirely, or present but itself skipped (empty name,
+	// negative price). Group membership never auto-creates a model, so just warn,
+	// distinguishing the two cases so the "invalid model" warning already logged
+	// above isn't mistaken for an unrelated "unknown model" one.
 	for modelName := range membership {
-		if _, ok := desired[modelName]; !ok {
+		if _, ok := desired[modelName]; ok {
+			continue
+		}
+		if _, ok := invalid[modelName]; ok {
+			logger.Info("skipping invalid model referenced in group configuration", "model", modelName)
+		} else {
 			logger.Info("skipping unknown model in group configuration", "model", modelName)
 		}
 	}

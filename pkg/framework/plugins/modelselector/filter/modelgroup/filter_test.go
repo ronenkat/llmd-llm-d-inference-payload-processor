@@ -26,15 +26,15 @@ import (
 	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/requesthandling"
 )
 
-// candidateModels builds the datalayer models handed to the filter. groupsByModel
+// candidateModels builds the datalayer models handed to the filter. membership
 // optionally maps a model name to the group names it belongs to (mirroring what
 // the model-config-datasource plugin would have written to the model's
-// AttributeMap); a model name absent from groupsByModel has no groups attribute.
-func candidateModels(groupsByModel map[string][]string, names ...string) []datalayer.Model {
+// AttributeMap); a model name absent from membership has no groups attribute.
+func candidateModels(membership map[string][]string, names ...string) []datalayer.Model {
 	models := make([]datalayer.Model, len(names))
 	for idx, name := range names {
 		m := datalayer.NewModel(name)
-		if groups, ok := groupsByModel[name]; ok {
+		if groups, ok := membership[name]; ok {
 			m.GetAttributes().Put(modelgroups.GroupsAttributeKey, modelgroups.Groups(groups))
 		}
 		models[idx] = m
@@ -111,7 +111,7 @@ func TestModelGroupFilter_NoGroupsConfigured(t *testing.T) {
 // modelgroups.GroupsAttributeKey attribute (as the model-config-datasource plugin
 // would populate it), rather than passed as filter constructor parameters.
 func TestModelGroupFilter_Filter(t *testing.T) {
-	groupsByModel := map[string][]string{
+	membership := map[string][]string{
 		"qwen3-8b":   {"qwen3models"},
 		"qwen3-32b":  {"qwen3models"},
 		"llama3-8b":  {"llama3"},
@@ -200,7 +200,7 @@ func TestModelGroupFilter_Filter(t *testing.T) {
 			f := NewModelGroupFilter()
 			req := requestWithModel(tt.modelBody)
 
-			got := modelNames(f.Filter(context.Background(), nil, req, candidateModels(groupsByModel, all...)))
+			got := modelNames(f.Filter(context.Background(), nil, req, candidateModels(membership, all...)))
 			want := append([]string{}, tt.want...)
 			sort.Strings(want)
 
@@ -237,12 +237,12 @@ func TestModelGroupFilter_GroupModelsNotInCandidates(t *testing.T) {
 // subset of a group's models are present in the candidate list, only those
 // present are returned.
 func TestModelGroupFilter_PartialGroupInCandidates(t *testing.T) {
-	groupsByModel := map[string][]string{
+	membership := map[string][]string{
 		"qwen3-8b":  {"qwen3models"},
 		"qwen3-72b": {"qwen3models"},
 	}
 	// Only qwen3-8b and qwen3-72b are in the data layer; qwen3-32b is absent.
-	candidates := candidateModels(groupsByModel, "qwen3-8b", "qwen3-72b", "mistral-7b")
+	candidates := candidateModels(membership, "qwen3-8b", "qwen3-72b", "mistral-7b")
 
 	f := NewModelGroupFilter()
 	req := requestWithModel("auto/qwen3models")
@@ -264,10 +264,10 @@ func TestModelGroupFilter_PartialGroupInCandidates(t *testing.T) {
 // TestModelGroupFilter_ModelInMultipleGroups verifies that a model carrying
 // more than one group in its attribute matches on any of them.
 func TestModelGroupFilter_ModelInMultipleGroups(t *testing.T) {
-	groupsByModel := map[string][]string{
+	membership := map[string][]string{
 		"qwen3-32b": {"qwen3models", "large-models"},
 	}
-	candidates := candidateModels(groupsByModel, "qwen3-32b")
+	candidates := candidateModels(membership, "qwen3-32b")
 
 	f := NewModelGroupFilter()
 

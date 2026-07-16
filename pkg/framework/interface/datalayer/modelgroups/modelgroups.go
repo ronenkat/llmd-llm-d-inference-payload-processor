@@ -21,7 +21,11 @@ limitations under the License.
 // selectors, so the storage contract has a single source of truth.
 package modelgroups
 
-import "github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
+import (
+	"slices"
+
+	"github.com/llm-d/llm-d-inference-payload-processor/pkg/framework/interface/datalayer"
+)
 
 // GroupsAttributeKey is the AttributeMap key under which a model's Groups is
 // stored. A model with no group memberships does not have this attribute set.
@@ -40,10 +44,5 @@ func (g Groups) Clone() datalayer.Cloneable {
 
 // Contains reports whether name appears in g.
 func (g Groups) Contains(name string) bool {
-	for _, n := range g {
-		if n == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(g, name)
 }
