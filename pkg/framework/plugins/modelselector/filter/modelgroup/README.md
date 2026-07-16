@@ -51,6 +51,5 @@ alongside them, a `groups` section mapping a group name to the model names that 
 
 With this configuration snippet, a request with `model` set to `auto/fast` is filtered to the candidates `qwen3-8b` and
 `gpt-oss-20b`; `auto/planning` is filtered to `gpt-oss-120b` and `gemma4`. A model can appear in more than
-one group's `models` list. A group with an empty `name` or an empty `models` list is skipped (logged at info
-level) by `model-config-datasource`, as is a group entry naming a model not present in the top-level
+one group's `models` list. A group with an empty `name` or an empty `models` list is skipped (and logged) by `model-config-datasource`, as is a group entry naming a model not present in the top-level
 `models` list.

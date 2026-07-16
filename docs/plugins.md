@@ -184,24 +184,20 @@ framework returns an error to the client.
 
 Restricts the candidate models based on the request body's `model` field. Supports explicit model
 selection by name, `auto` (or an absent/empty field) to keep all candidates, and `auto/<group-name>`
-to select the models belonging to a configured group.
+to select the models belonging to a named group.
 
 - Absent, empty, or exactly `auto`: all incoming candidates are kept.
-- `auto/<group-name>`: the candidates whose name appears in the configured group `<group-name>` are
-  kept.
+- `auto/<group-name>`: each candidate model is checked for `<group-name>` in its own
+  `modelgroups.GroupsAttributeKey` attribute; only candidates that list that group are kept.
 - Any other non-empty string: the single candidate whose name matches that string is kept.
 - An unknown group, an empty intersection, or a malformed (non-string) `model` field: no candidates
   are returned, and the pipeline rejects the request with HTTP 429.
 
-**Parameters:** a map of group name → list of model names.
+**Parameters:** None.
 
 ```yaml
 plugins:
 - type: model-group-name-filter
-  parameters:
-    qwen3models:                # The group name
-      - qwen3-8b                # Model name in the group
-      - qwen3-32b               # Model name in the group
 ```
 
 **Source:** [`pkg/framework/plugins/modelselector/filter/modelgroup/`][src-modelgroupfilter]
