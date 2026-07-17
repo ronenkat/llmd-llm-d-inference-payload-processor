@@ -163,7 +163,7 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 					logger.Error(err, "failed to resolve event path", "path", event.Name)
 					continue
 				}
-				// Verify that event reffers to the config file
+				// Verify that event refers to the config file
 				if absEvent != c.absModelsPath {
 					continue
 				}
