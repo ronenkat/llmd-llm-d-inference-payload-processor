@@ -126,6 +126,9 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if data == nil {
+		logger.Info("configuration file is empty")
+	}
 	if err := c.syncModels(ctx, data); err != nil {
 		return err
 	}
@@ -160,10 +163,12 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 					logger.Error(err, "failed to resolve event path", "path", event.Name)
 					continue
 				}
+				// Verify that event reffers to the config file
 				if absEvent != c.absModelsPath {
 					continue
 				}
-				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) {
+				// The following handles ONLY changes to the configuration file
+				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
 					data, err := readModelsFile(c.absModelsPath)
 					if err != nil {
 						logger.Error(err, "failed to read models config after file change")
@@ -171,11 +176,6 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 					}
 					if err := c.syncModels(ctx, data); err != nil {
 						logger.Error(err, "failed to sync models after file change")
-					}
-				} else if event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
-					logger.Info("models config file removed or renamed; clearing models until replacement appears", "path", c.absModelsPath)
-					if err := c.syncModels(ctx, nil); err != nil {
-						logger.Error(err, "failed to clear models after file removal or rename")
 					}
 				}
 			case err, ok := <-watcher.Errors:
