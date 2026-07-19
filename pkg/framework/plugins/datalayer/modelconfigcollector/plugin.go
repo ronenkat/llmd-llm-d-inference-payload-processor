@@ -122,12 +122,9 @@ func (c *ModelConfigDataSource) TypedName() plugin.TypedName { return c.typedNam
 func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 	logger := log.FromContext(ctx).WithName("model-config-datasource")
 
-	data, err := readModelsFile(c.absModelsPath)
+	data, err := readModelsFile(c.absModelsPath, true)
 	if err != nil {
-		return err
-	}
-	if data == nil {
-		logger.Info("configuration file is empty")
+		return fmt.Errorf("failed to read models config: %w", err)
 	}
 	if err := c.syncModels(ctx, data); err != nil {
 		return err
@@ -169,7 +166,7 @@ func (c *ModelConfigDataSource) Start(ctx context.Context) error {
 				}
 				// The following handles ONLY changes to the configuration file
 				if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename) {
-					data, err := readModelsFile(c.absModelsPath)
+					data, err := readModelsFile(c.absModelsPath, false)
 					if err != nil {
 						logger.Error(err, "failed to read models config after file change")
 						continue
@@ -196,13 +193,13 @@ func (c *ModelConfigDataSource) Stop() {
 	<-c.doneCh
 }
 
-// readModelsFile reads the config file at path, treating a missing file as empty
-// content rather than an error so callers can converge to an empty config when the
-// file has been deleted or renamed away.
-func readModelsFile(path string) ([]byte, error) {
+// readModelsFile reads the config file at path. If failOnMissing is false, a missing
+// file is treated as empty content rather than an error, so callers can converge to an
+// empty config when the file has been deleted or renamed away after startup.
+func readModelsFile(path string, failOnMissing bool) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) && !failOnMissing {
 			return nil, nil
 		}
 		return nil, err
